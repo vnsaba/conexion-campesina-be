@@ -17,6 +17,13 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
-    "paths": {}
+    "paths": {
+      "@app/nats": [
+        "libs/nats/src"
+      ],
+      "@app/nats/*": [
+        "libs/nats/src/*"
+      ]
+    }
   }
 }

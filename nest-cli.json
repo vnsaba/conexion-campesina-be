@@ -1,14 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "apps/client-gatway/src",
+  "sourceRoot": "apps/client-gateway/src",
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true,
-    "tsConfigPath": "apps/client-gatway/tsconfig.app.json"
+    "tsConfigPath": "apps/client-gateway/tsconfig.app.json"
   },
   "monorepo": true,
-  "root": "apps/client-gatway",
+  "root": "apps/client-gateway",
   "projects": {
     "auth-service": {
       "type": "application",
@@ -37,13 +37,13 @@
         "tsConfigPath": "apps/client-gateway/tsconfig.app.json"
       }
     },
-    "client-gatway": {
-      "type": "application",
-      "root": "apps/client-gatway",
-      "entryFile": "main",
-      "sourceRoot": "apps/client-gatway/src",
+    "nats": {
+      "type": "library",
+      "root": "libs/nats",
+      "entryFile": "index",
+      "sourceRoot": "libs/nats/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/client-gatway/tsconfig.app.json"
+        "tsConfigPath": "libs/nats/tsconfig.lib.json"
       }
     },
     "notification-service": {
@@ -80,15 +80,6 @@
       "sourceRoot": "apps/product-service/src",
       "compilerOptions": {
         "tsConfigPath": "apps/product-service/tsconfig.app.json"
-      }
-    },
-    "pyment-service": {
-      "type": "application",
-      "root": "apps/pyment-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/pyment-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/pyment-service/tsconfig.app.json"
       }
     }
   }
