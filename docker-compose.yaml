@@ -1,0 +1,6 @@
+services:
+  nats-server:
+    image: nats:2.11.6-alpine3.22
+    ports:
+      - 8222:8222
+      - 4222:4222
