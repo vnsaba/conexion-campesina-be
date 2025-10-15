@@ -14,7 +14,7 @@ export class AuthController {
   constructor(
     @Inject(NATS_SERVICE_KEY)
     private readonly natsClient: ClientProxy,
-  ) { }
+  ) {}
 
   @Post('register')
   registerUser(@Body() registerUserDto: RegisterUserDto) {

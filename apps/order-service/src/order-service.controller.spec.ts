@@ -11,7 +11,9 @@ describe('OrderServiceController', () => {
       providers: [OrderServiceService],
     }).compile();
 
-    orderServiceController = app.get<OrderServiceController>(OrderServiceController);
+    orderServiceController = app.get<OrderServiceController>(
+      OrderServiceController,
+    );
   });
 
   describe('root', () => {

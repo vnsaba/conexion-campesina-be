@@ -1,12 +1,11 @@
 import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '../generated/prisma';
 import { RegisterUserDto } from './dto/register-user.dto';
-import { RpcException, Payload } from '@nestjs/microservices';
+import { RpcException } from '@nestjs/microservices';
 import * as bcrypt from 'bcryptjs';
 import { LoginUserDto } from './dto/login-user.dto';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
-import { stat } from 'fs';
 
 @Injectable()
 export class AuthServiceService extends PrismaClient implements OnModuleInit {
@@ -68,61 +67,66 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
     });
   }
 
-  async signJWT(payload: JwtPayload) {
+  signJWT(payload: JwtPayload) {
     return this.jwtService.sign(payload);
   }
 
   async loginUser(loginUserDto: LoginUserDto) {
-    const { email, password } = loginUserDto
+    const { email, password } = loginUserDto;
 
     try {
-      const user = await this.user.findUnique({ where: { email } })
+      const user = await this.user.findUnique({ where: { email } });
 
       if (!user) {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
           message: 'Email or password not valid',
-        })
+        });
       }
 
-      const isPasswordValid = await bcrypt.compare(password, user.password)
+      const isPasswordValid = await bcrypt.compare(password, user.password);
 
       if (!isPasswordValid) {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
           message: 'Email or password not valid',
-        })
+        });
       }
 
+      // eslint-disable-next-line
       const { password: __, ...userData } = user;
 
       return {
         user: userData,
-        token: await this.signJWT(userData)
+        token: this.signJWT(userData),
       };
-
     } catch (error) {
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: error.message,
-      })
+      });
     }
   }
 
-  async verifyToken(token: string) {
+  verifyToken(token: string) {
     try {
       console.log(token);
-      const {sub, iat, ...user} = this.jwtService.verify(token, { secret: process.env.JWT_SECRET });
+      // eslint-disable-next-line
+      const { sub, iat, ...user } = this.jwtService.verify(token, {
+        secret: process.env.JWT_SECRET,
+      });
       console.log(user);
       return {
         user: user,
-        token: token
-      }
+        token: token,
+      };
     } catch (error) {
+      this.logger.error(error);
+
       throw new RpcException({
         status: HttpStatus.UNAUTHORIZED,
         message: 'Invalid token',
-      })
+      });
     }
   }
 }
