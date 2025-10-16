@@ -5,4 +5,5 @@ async function bootstrap() {
   const app = await NestFactory.create(PaymentServiceModule);
   await app.listen(process.env.port ?? 3000);
 }
-bootstrap();
+
+void bootstrap();

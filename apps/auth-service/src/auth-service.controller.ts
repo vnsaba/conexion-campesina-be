@@ -6,7 +6,7 @@ import { LoginUserDto } from './dto/login-user.dto';
 
 @Controller()
 export class AuthServiceController {
-  constructor(private readonly authServiceService: AuthServiceService) { }
+  constructor(private readonly authServiceService: AuthServiceService) {}
 
   @MessagePattern('auth.register.user')
   registerUser(@Payload() registerUserDto: RegisterUserDto) {
@@ -19,7 +19,7 @@ export class AuthServiceController {
   }
 
   @MessagePattern('auth.verify.token')
-  verifyToken(@Payload() token: string){
+  verifyToken(@Payload() token: string) {
     return this.authServiceService.verifyToken(token);
   }
 }
