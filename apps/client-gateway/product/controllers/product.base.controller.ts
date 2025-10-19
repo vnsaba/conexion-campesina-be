@@ -14,6 +14,9 @@ import { CreateProductBaseDto } from 'apps/product-service/src/product-base/dto/
 import { UpdateProductBaseDto } from 'apps/product-service/src/product-base/dto/update-product-base.dto';
 import { catchError } from 'rxjs';
 import { AuthGuard } from 'apps/client-gateway/auth/guards/auth.guards';
+import { UserRoleGuard } from 'apps/client-gateway/auth/guards/user-role.guard';
+import { RoleProtected } from 'apps/client-gateway/auth/guards/decorators';
+import { ValidRoles } from '../../auth/enum/valid-roles.enum';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -32,7 +35,8 @@ export class ProductBaseController {
    * @param createProductBaseDto Product Base data to create
    * @returns Observable with the created Product Base
    */
-  @UseGuards(AuthGuard)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
   @Post('')
   createProductBase(@Body() createProductBaseDto: CreateProductBaseDto) {
     return this.natsClient
@@ -51,7 +55,8 @@ export class ProductBaseController {
    *
    * @returns Observable with the list of Product Bases
    */
-  @UseGuards(AuthGuard)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
   @Get('')
   findAllProductBase() {
     return this.natsClient.send('product.base.findAll', {}).pipe(
@@ -69,7 +74,8 @@ export class ProductBaseController {
    * @param id Product Base identifier (string/ObjectId)
    * @returns Observable with the found Product Base
    */
-  @UseGuards(AuthGuard)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
   @Get(':id')
   findOneProductBase(@Param('id') id: string) {
     return this.natsClient.send('product.base.findOne', id).pipe(
@@ -89,7 +95,8 @@ export class ProductBaseController {
    * @param updateProductBaseDto Fields to update
    * @returns Observable with the updated Product Base
    */
-  @UseGuards(AuthGuard)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
   @Patch(':id')
   updateProductBase(
     @Param('id') id: string,
@@ -115,7 +122,8 @@ export class ProductBaseController {
    * @param id Product Base identifier to remove
    * @returns Observable with deletion confirmation
    */
-  @UseGuards(AuthGuard)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
   @Delete(':id')
   removeProductBase(@Param('id') id: string) {
     return this.natsClient.send('product.base.remove', id).pipe(
