@@ -1,5 +1,11 @@
-import { HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '../generated/prisma';
+import {
+  HttpStatus,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { PrismaClient, ValidRoles } from '../generated/prisma';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { RpcException } from '@nestjs/microservices';
 import * as bcrypt from 'bcryptjs';
@@ -42,6 +48,7 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
           password: hashedPassword,
           fullName,
           role,
+          isActive: role !== ValidRoles.PRODUCER,
         },
       });
 
@@ -84,6 +91,13 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
         });
       }
 
+      if (!user.isActive) {
+        throw new RpcException({
+          status: HttpStatus.UNAUTHORIZED,
+          message: 'Inactive user',
+        });
+      }
+
       const isPasswordValid = await bcrypt.compare(password, user.password);
 
       if (!isPasswordValid) {
@@ -108,24 +122,37 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
     }
   }
 
-  verifyToken(token: string) {
+  async verifyToken(token: string) {
     try {
-      console.log(token);
-      // eslint-disable-next-line
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { sub, iat, ...user } = this.jwtService.verify(token, {
         secret: process.env.JWT_SECRET,
       });
-      console.log(user);
+
+      const dbUser = await this.user.findFirst({
+        where: {
+          id: user.id,
+          isActive: true,
+        },
+      });
+
+      if (!dbUser) {
+        throw new UnauthorizedException('Inactive user');
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...restUser } = dbUser;
+
       return {
-        user: user,
-        token: token,
+        user: restUser,
+        token,
       };
     } catch (error) {
       this.logger.error(error);
 
       throw new RpcException({
         status: HttpStatus.UNAUTHORIZED,
-        message: 'Invalid token',
+        message: 'Invalid token or user',
       });
     }
   }

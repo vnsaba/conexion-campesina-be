@@ -4,8 +4,10 @@ import { LoginUserDto } from 'apps/auth-service/src/dto/login-user.dto';
 import { RegisterUserDto } from 'apps/auth-service/src/dto/register-user.dto';
 import { catchError } from 'rxjs';
 import { AuthGuard } from './guards/auth.guards';
-import { Token, User } from './guards/decorators';
+import { RoleProtected, Token, User } from './guards/decorators';
 import { CurrentUser } from './guards/interface/current-user.interface';
+import { UserRoleGuard } from './guards/user-role.guard';
+import { ValidRoles } from './enum/valid-roles.enum';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -38,5 +40,12 @@ export class AuthController {
   @Get('verify')
   verifyToken(@User() user: CurrentUser, @Token() token: string) {
     return { user, token };
+  }
+
+  @Get('ejemploAuth')
+  @RoleProtected(ValidRoles.CLIENT, ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  ejemploAuth() {
+    return 'Acceso concedido';
   }
 }
