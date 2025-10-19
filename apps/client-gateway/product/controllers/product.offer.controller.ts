@@ -13,8 +13,6 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { catchError } from 'rxjs';
 
 import { AuthGuard } from 'apps/client-gateway/auth/guards/auth.guards';
-import { RolesGuard } from '../guards/roles.guard';
-import { Roles } from '../guards/decorators';
 
 import { CreateProductOfferDto } from 'apps/product-service/src/product-offer/dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from 'apps/product-service/src/product-offer/dto/update-product-offer.dto';
@@ -41,8 +39,7 @@ export class ProductOfferController {
    * @param createProductOfferDto Product Offer data to create
    * @returns Observable with the created Product Offer (including productBase)
    */
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles('ADMIN', 'PRODUCER')
+  @UseGuards(AuthGuard)
   @Post('')
   createProductOffer(@Body() createProductOfferDto: CreateProductOfferDto) {
     return this.natsClient
@@ -61,8 +58,7 @@ export class ProductOfferController {
    *
    * @returns Observable with the list of Product Offers (including productBase)
    */
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles('ADMIN', 'PRODUCER')
+  @UseGuards(AuthGuard)
   @Get('')
   findAllProductOffer() {
     return this.natsClient.send('product.offer.findAll', {}).pipe(
@@ -80,8 +76,7 @@ export class ProductOfferController {
    * @param id Product Offer identifier (string/ObjectId)
    * @returns Observable with the found Product Offer (including productBase)
    */
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles('ADMIN', 'PRODUCER')
+  @UseGuards(AuthGuard)
   @Get(':id')
   findOneProductOffer(@Param('id') id: string) {
     return this.natsClient.send('product.offer.findOne', id).pipe(
@@ -101,8 +96,7 @@ export class ProductOfferController {
    * @param updateProductOfferDto Fields to update
    * @returns Observable with the updated Product Offer (including productBase)
    */
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles('ADMIN', 'PRODUCER')
+  @UseGuards(AuthGuard)
   @Patch(':id')
   updateProductOffer(
     @Param('id') id: string,
@@ -128,8 +122,7 @@ export class ProductOfferController {
    * @param id Product Offer identifier to remove
    * @returns Observable with deletion confirmation
    */
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles('ADMIN', 'PRODUCER')
+  @UseGuards(AuthGuard)
   @Delete(':id')
   removeProductOffer(@Param('id') id: string) {
     return this.natsClient.send('product.offer.remove', id).pipe(
