@@ -60,10 +60,18 @@ Make sure to be in the root folder of the app, not inside auth ms
 $ npx prisma generate --schema=apps/auth-service/prisma/schema.prisma
 ```
 
+```bash
+$ npx prisma generate --schema=apps/product-service/prisma/schema.prisma
+```
+
 ## To run another ms
 
 ```bash
 $ nest start auth-service --watch
+```
+
+```bash
+$ nest start product-service --watch
 ```
 
 You can run the other microservices with that same command, replacing 'auth-service' with the name of the microservice

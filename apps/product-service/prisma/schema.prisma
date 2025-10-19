@@ -1,0 +1,71 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("PRODUCT_MS_DATABASE_URL")
+}
+
+model ProductBase {
+  id       String         @id @default(auto()) @map("_id") @db.ObjectId
+  name     String
+  category Category
+  offers   ProductOffer[]
+
+  @@map("product_bases")
+}
+
+model ProductOffer {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  productBaseId String      @db.ObjectId
+  productBase   ProductBase @relation(fields: [productBaseId], references: [id])
+  producerId    String
+  name          String
+  description   String
+  price         Int
+  imageUrl      String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([productBaseId])
+  @@map("product_offers")
+}
+
+enum Category {
+  FRUITS
+  VEGETABLES
+  GRAINS
+  LEGUMES
+  TUBERS
+  HERBS
+  SPICES
+  SEEDS
+  NUTS
+  OILS
+  DAIRY
+  MEAT
+  POULTRY
+  EGGS
+  FISH
+  HONEY
+  COFFEE
+  COCOA
+  FLOWERS
+  PLANTS
+  COMPOST
+  FERTILIZERS
+  FEED
+  BEVERAGES
+  PROCESSED
+}
+
+
+
