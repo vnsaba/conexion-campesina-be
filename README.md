@@ -60,6 +60,7 @@ Make sure to be in the root folder of the app, not inside auth ms
 $ npx prisma generate --schema=apps/auth-service/prisma/schema.prisma
 ```
 
+#### Product MS
 ```bash
 $ npx prisma generate --schema=apps/product-service/prisma/schema.prisma
 ```
@@ -88,3 +89,18 @@ $ npm run test:e2e
 # test coverage
 $ npm run test:cov
 ```
+
+
+## Documentación
+
+Este proyecto utiliza [Compodoc](https://compodoc.app/) para generar documentación automática.
+
+### Comandos disponibles
+
+```bash
+npm run doc:generate
+```
+
+### Ver documentación
+
+Después de generar, abre: http://localhost:8080
