@@ -30,42 +30,74 @@ model ProductOffer {
   producerId    String
   name          String
   description   String
-  price         Int
+  price         Float
+  isAvailable   Boolean     @default(true)
   imageUrl      String
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+
+  unitId        String      @db.ObjectId
+  unit          Unit        @relation(fields: [unitId], references: [id])
+
+  quantity      Float
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@index([productBaseId])
+  @@index([producerId])
+  @@index([unitId])
   @@map("product_offers")
 }
 
-enum Category {
-  FRUITS
-  VEGETABLES
-  GRAINS
-  LEGUMES
-  TUBERS
-  HERBS
-  SPICES
-  SEEDS
-  NUTS
-  OILS
-  DAIRY
-  MEAT
-  POULTRY
-  EGGS
-  FISH
-  HONEY
-  COFFEE
-  COCOA
-  FLOWERS
-  PLANTS
-  COMPOST
-  FERTILIZERS
-  FEED
-  BEVERAGES
-  PROCESSED
+model Unit {
+  id              String     @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  symbol          String
+  type            MeasureType
+  description     String?
+  equivalentValue Float?
+  baseUnit        String?
+  
+  offers          ProductOffer[]
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("units")
 }
 
 
+enum Category {
+  FRUTAS
+  VERDURAS
+  GRANOS
+  LEGUMINOSAS
+  TUBERCULOS
+  HIERBAS
+  ESPECIAS
+  SEMILLAS
+  NUECES
+  ACEITES
+  LACTEOS
+  CARNES
+  AVES
+  HUEVOS
+  PESCADOS
+  MIEL
+  CAFE
+  CACAO
+  FLORES
+  PLANTAS
+  COMPOSTA
+  FERTILIZANTES
+  ALIMENTO_ANIMAL
+  BEBIDAS
+  PROCESADOS
+}
 
+enum MeasureType {
+  WEIGHT    // (PESO) kg, g, lb, oz
+  VOLUME    // (VOLUMEN) l, ml
+  COUNT     // (CANTIDAD) unidad, docena
+  LENGTH    // (LONGITUD) m, cm
+  AREA      // (ÁREA) m², ha
+  OTHER     // (OTRO)
+}

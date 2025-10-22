@@ -18,6 +18,7 @@ import { CreateProductOfferDto } from 'apps/product-service/src/product-offer/dt
 import { UpdateProductOfferDto } from 'apps/product-service/src/product-offer/dto/update-product-offer.dto';
 import { RoleProtected } from 'apps/client-gateway/auth/guards/decorators';
 import { ValidRoles } from '../../auth/enum/valid-roles.enum';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -26,6 +27,7 @@ const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
  * Proxies requests to product-service via NATS message patterns (product.offer.*).
  * Protected by AuthGuard and restricted by RolesGuard.
  */
+@ApiBearerAuth('bearer')
 @Controller('product/offer')
 export class ProductOfferController {
   constructor(

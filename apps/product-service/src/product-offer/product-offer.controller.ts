@@ -48,10 +48,14 @@ export class ProductOfferController {
    */
   @MessagePattern('product.offer.update')
   update(
-    @Payload() updatePayload: { id: string; data: UpdateProductOfferDto },
+    @Payload()
+    updatePayload: {
+      id: string;
+      updateProductOffer: UpdateProductOfferDto;
+    },
   ) {
-    const { id, data } = updatePayload;
-    return this.productOfferService.update(id, data);
+    const { id, updateProductOffer } = updatePayload;
+    return this.productOfferService.update(id, updateProductOffer);
   }
 
   /**

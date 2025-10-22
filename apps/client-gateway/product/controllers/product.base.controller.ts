@@ -17,9 +17,10 @@ import { AuthGuard } from 'apps/client-gateway/auth/guards/auth.guards';
 import { UserRoleGuard } from 'apps/client-gateway/auth/guards/user-role.guard';
 import { RoleProtected } from 'apps/client-gateway/auth/guards/decorators';
 import { ValidRoles } from '../../auth/enum/valid-roles.enum';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
-
+@ApiBearerAuth('bearer')
 @Controller('product/base')
 export class ProductBaseController {
   constructor(
@@ -122,7 +123,7 @@ export class ProductBaseController {
    * @param id Product Base identifier to remove
    * @returns Observable with deletion confirmation
    */
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
+  @RoleProtected(ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Delete(':id')
   removeProductBase(@Param('id') id: string) {

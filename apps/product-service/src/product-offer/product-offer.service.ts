@@ -11,8 +11,8 @@ import { Prisma, PrismaClient } from '../../generated/prisma';
 import { CreateProductOfferDto } from './dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from './dto/update-product-offer.dto';
 
-type ProductOfferWithBase = Prisma.ProductOfferGetPayload<{
-  include: { productBase: true };
+type ProductOfferWithRelations = Prisma.ProductOfferGetPayload<{
+  include: { productBase: true; unit: true };
 }>;
 
 @Injectable()
@@ -28,18 +28,42 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Creates a new product offer and returns it including its ProductBase
+   * Creates a new product offer and returns it including its ProductBase and Unit
    * @param createProductOfferDto - Data transfer object containing product offer information
-   * @returns The created product offer with its associated ProductBase
+   * @returns The created product offer with its associated ProductBase and Unit
+   * @throws {RpcException} If ProductBase doesn't exist
+   * @throws {RpcException} If Unit doesn't exist
    * @throws {RpcException} If a product offer with the same name, producerId and productBaseId already exists
    * @throws {RpcException} If there's a database error during creation
    */
   async create(
     createProductOfferDto: CreateProductOfferDto,
-  ): Promise<ProductOfferWithBase> {
-    const { productBaseId, producerId, name } = createProductOfferDto;
+  ): Promise<ProductOfferWithRelations> {
+    const { productBaseId, producerId, name, unitId } = createProductOfferDto;
 
     try {
+      const productBase = await this.productBase.findUnique({
+        where: { id: productBaseId },
+      });
+
+      if (!productBase) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: `ProductBase with id '${productBaseId}' not found`,
+        });
+      }
+
+      const unit = await this.unit.findUnique({
+        where: { id: unitId },
+      });
+
+      if (!unit) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: `Unit with id '${unitId}' not found`,
+        });
+      }
+
       const existingProductOffer = await this.productOffer.findFirst({
         where: { productBaseId, producerId, name },
       });
@@ -47,13 +71,19 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       if (existingProductOffer) {
         throw new RpcException({
           status: HttpStatus.CONFLICT,
-          message: `Product offer '${name}' already exists`,
+          message: `Product offer '${name}' already exists for this producer and product base`,
         });
       }
 
       const createdProductOffer = await this.productOffer.create({
-        data: createProductOfferDto,
-        include: { productBase: true },
+        data: {
+          ...createProductOfferDto,
+          isAvailable: createProductOfferDto.isAvailable ?? true,
+        },
+        include: {
+          productBase: true,
+          unit: true,
+        },
       });
 
       this.logger.log(`ProductOffer created: ${createdProductOffer.id}`);
@@ -70,14 +100,17 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Returns all product offers including their ProductBase
+   * Returns all product offers including their ProductBase and Unit
    * @returns Array of all product offers ordered by creation date (newest first)
    * @throws {RpcException} If there's a database error during retrieval
    */
-  async findAll(): Promise<ProductOfferWithBase[]> {
+  async findAll(): Promise<ProductOfferWithRelations[]> {
     try {
       const productOffers = await this.productOffer.findMany({
-        include: { productBase: true },
+        include: {
+          productBase: true,
+          unit: true,
+        },
         orderBy: { createdAt: 'desc' },
       });
 
@@ -96,17 +129,20 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Returns a product offer by id including its ProductBase
+   * Returns a product offer by id including its ProductBase and Unit
    * @param id - The MongoDB ObjectId of the product offer
-   * @returns The product offer with its associated ProductBase
+   * @returns The product offer with its associated ProductBase and Unit
    * @throws {RpcException} If the product offer is not found
    * @throws {RpcException} If there's a database error during retrieval
    */
-  async findOne(id: string): Promise<ProductOfferWithBase> {
+  async findOne(id: string): Promise<ProductOfferWithRelations> {
     try {
       const productOffer = await this.productOffer.findUnique({
         where: { id },
-        include: { productBase: true },
+        include: {
+          productBase: true,
+          unit: true,
+        },
       });
 
       if (!productOffer) {
@@ -134,18 +170,20 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Updates a product offer and returns it including its ProductBase
+   * Updates a product offer and returns it including its ProductBase and Unit
    * @param id - The MongoDB ObjectId of the product offer to update
    * @param updateProductOfferDto - Data transfer object with fields to update
-   * @returns The updated product offer with its associated ProductBase
+   * @returns The updated product offer with its associated ProductBase and Unit
    * @throws {RpcException} If no fields are provided to update
+   * @throws {RpcException} If ProductBase doesn't exist (when updating productBaseId)
+   * @throws {RpcException} If Unit doesn't exist (when updating unitId)
    * @throws {RpcException} If the product offer is not found
    * @throws {RpcException} If there's a database error during update
    */
   async update(
     id: string,
     updateProductOfferDto: UpdateProductOfferDto,
-  ): Promise<ProductOfferWithBase> {
+  ): Promise<ProductOfferWithRelations> {
     try {
       if (Object.keys(updateProductOfferDto).length === 0) {
         throw new RpcException({
@@ -154,19 +192,41 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      const productOfferExist = await this.findOne(id);
+      await this.findOne(id);
 
-      if (!productOfferExist) {
-        throw new RpcException({
-          status: HttpStatus.BAD_REQUEST,
-          message: 'Product offer not found',
+      if (updateProductOfferDto.productBaseId) {
+        const productBase = await this.productBase.findUnique({
+          where: { id: updateProductOfferDto.productBaseId },
         });
+
+        if (!productBase) {
+          throw new RpcException({
+            status: HttpStatus.NOT_FOUND,
+            message: `ProductBase with id '${updateProductOfferDto.productBaseId}' not found`,
+          });
+        }
+      }
+
+      if (updateProductOfferDto.unitId) {
+        const unit = await this.unit.findUnique({
+          where: { id: updateProductOfferDto.unitId },
+        });
+
+        if (!unit) {
+          throw new RpcException({
+            status: HttpStatus.NOT_FOUND,
+            message: `Unit with id '${updateProductOfferDto.unitId}' not found`,
+          });
+        }
       }
 
       const updatedProductOffer = await this.productOffer.update({
         where: { id },
         data: updateProductOfferDto,
-        include: { productBase: true },
+        include: {
+          productBase: true,
+          unit: true,
+        },
       });
 
       this.logger.log(`ProductOffer updated: ${id}`);
@@ -194,14 +254,7 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
    */
   async remove(id: string): Promise<{ message: string; id: string }> {
     try {
-      const productOffer = await this.findOne(id);
-
-      if (!productOffer) {
-        throw new RpcException({
-          status: HttpStatus.NOT_FOUND,
-          message: `ProductOffer with id '${id}' not found`,
-        });
-      }
+      await this.findOne(id);
 
       await this.productOffer.delete({ where: { id } });
 
