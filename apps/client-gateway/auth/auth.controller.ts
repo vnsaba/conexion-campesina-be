@@ -8,9 +8,10 @@ import { RoleProtected, Token, User } from './guards/decorators';
 import { CurrentUser } from './guards/interface/current-user.interface';
 import { UserRoleGuard } from './guards/user-role.guard';
 import { ValidRoles } from './enum/valid-roles.enum';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
-
+@ApiBearerAuth('bearer')
 @Controller('auth')
 export class AuthController {
   constructor(
