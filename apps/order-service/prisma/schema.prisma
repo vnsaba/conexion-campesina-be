@@ -11,8 +11,7 @@ datasource db {
 
 enum OrderStatus {
   PENDING
-  CONFIRMED
-  SHIPPED
+  PAID
   DELIVERED
   CANCELLED
 }
@@ -22,6 +21,7 @@ model Order {
   clientId    String        @db.ObjectId
   status      OrderStatus   @default(PENDING)
   totalAmount Float
+  totalItems  Int           @default(0)
   address     String
   orderDate   DateTime      @default(now())
   
@@ -38,6 +38,7 @@ model OrderDetails {
   orderId        String @db.ObjectId
   productOfferId String @db.ObjectId
   quantity       Int
+  price          Float
   subtotal       Float
   
   order          Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)

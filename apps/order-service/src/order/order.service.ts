@@ -9,6 +9,7 @@ import { RpcException } from '@nestjs/microservices';
 import { PrismaClient } from '../../generated/prisma';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
+import { OrderPaginationDto } from './dto/order-pagination.dto';
 
 @Injectable()
 export class OrderService extends PrismaClient implements OnModuleInit {
@@ -27,13 +28,25 @@ export class OrderService extends PrismaClient implements OnModuleInit {
 
     try {
       let totalAmount = 0;
-      const processedOrderDetails = [];
+      let totalItems = 0;
+      const processedOrderDetails: Array<{
+        productOfferId: string;
+        quantity: number;
+        price: number;
+        subtotal: number;
+      }> = [];
 
       for (const detail of orderDetails) {
-        // TODO: Hacer la llamada al servicio de product-service para obtener el precio del producto
-        // y calcular el subtotal
-        const subtotal = detail.quantity * 10;
+        const subtotal = detail.quantity * detail.price;
         totalAmount += subtotal;
+        totalItems += detail.quantity;
+
+        processedOrderDetails.push({
+          productOfferId: detail.productOfferId,
+          quantity: detail.quantity,
+          price: detail.price,
+          subtotal: subtotal,
+        });
       }
 
       const order = await this.order.create({
@@ -42,6 +55,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
           status: status || 'PENDING',
           address,
           totalAmount,
+          totalItems,
           orderDetails: {
             create: processedOrderDetails,
           },
@@ -65,14 +79,35 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   /**
    * Obtiene todas las ordenes
    */
-  async findAll() {
+  async findAll(orderPaginationDto: OrderPaginationDto) {
     try {
-      return await this.order.findMany({
-        include: {
-          orderDetails: true,
+      const totalPages = await this.order.count({
+        where: {
+          status: orderPaginationDto.status,
         },
-        orderBy: { orderDate: 'desc' },
       });
+
+      const currentPage = orderPaginationDto.page ?? 1;
+      const perPage = orderPaginationDto.limit ?? 10;
+
+      return {
+        data: await this.order.findMany({
+          skip: (currentPage - 1) * perPage,
+          take: perPage,
+          where: {
+            status: orderPaginationDto.status,
+          },
+          include: {
+            orderDetails: true,
+          },
+          orderBy: { orderDate: 'desc' },
+        }),
+        meta: {
+          total: totalPages,
+          page: currentPage,
+          lastPage: Math.ceil(totalPages / perPage),
+        },
+      };
     } catch (error) {
       this.logger.error('Error al obtener todas las ordenes', error.stack);
       throw new RpcException({
@@ -156,22 +191,26 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         });
 
         let newTotalAmount = 0;
+        let newTotalItems = 0;
 
         for (const detail of updateOrderDto.orderDetails) {
-          const subtotal = detail.quantity * 10;
+          const subtotal = detail.quantity * detail.price;
           newTotalAmount += subtotal;
+          newTotalItems += detail.quantity;
 
           await this.orderDetails.create({
             data: {
               orderId: id,
               productOfferId: detail.productOfferId,
               quantity: detail.quantity,
+              price: detail.price,
               subtotal: subtotal,
             },
           });
         }
 
         orderUpdateData.totalAmount = newTotalAmount;
+        orderUpdateData.totalItems = newTotalItems;
       }
 
       const updatedOrder = await this.order.update({
