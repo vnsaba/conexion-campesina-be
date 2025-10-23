@@ -1,0 +1,51 @@
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("ORDER_MS_DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model Order {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  clientId    String        @db.ObjectId
+  status      OrderStatus   @default(PENDING)
+  totalAmount Float
+  address     String
+  orderDate   DateTime      @default(now())
+  
+  orderDetails OrderDetails[]
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("orders")
+}
+
+model OrderDetails {
+  id             String @id @default(auto()) @map("_id") @db.ObjectId
+  orderId        String @db.ObjectId
+  productOfferId String @db.ObjectId
+  quantity       Int
+  subtotal       Float
+  
+  order          Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productOfferId])
+  @@map("order_details")
+}
