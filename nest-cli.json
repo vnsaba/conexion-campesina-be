@@ -5,7 +5,17 @@
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true,
-    "tsConfigPath": "apps/client-gateway/tsconfig.app.json"
+    "tsConfigPath": "apps/client-gateway/tsconfig.app.json",
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "classValidatorShim": true,
+          "introspectComments": true,
+          "skipAutoHttpCode": false
+        }
+      }
+    ]
   },
   "monorepo": true,
   "root": "apps/client-gateway",
