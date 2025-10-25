@@ -11,9 +11,6 @@ import { PrismaClient } from '../../generated/prisma';
 import { CreateProductBaseDto } from './dto/create-product-base.dto';
 import { UpdateProductBaseDto } from './dto/update-product-base.dto';
 
-/**
- * Service responsible for managing ProductBase entities
- */
 @Injectable()
 export class ProductBaseService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger('ProductBaseService');

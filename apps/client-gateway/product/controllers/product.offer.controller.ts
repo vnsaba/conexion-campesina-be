@@ -36,12 +36,8 @@ export class ProductOfferController {
   ) {}
 
   /**
-   * Creates a new Product Offer.
-   * Sends message pattern: 'product.offer.create'
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @param createProductOfferDto Product Offer data to create
-   * @returns Observable with the created Product Offer (including productBase)
+   * Creates a new product offer.
+   * Sends product offer data to the NATS product service for offer creation.
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
@@ -57,11 +53,8 @@ export class ProductOfferController {
   }
 
   /**
-   * Retrieves all Product Offers.
-   * Sends message pattern: 'product.offer.findAll'
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @returns Observable with the list of Product Offers (including productBase)
+   * Retrieves all product offers.
+   * Sends request to the NATS product service and returns the list of product offers.
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
@@ -75,12 +68,8 @@ export class ProductOfferController {
   }
 
   /**
-   * Retrieves a Product Offer by its ID.
-   * Sends message pattern: 'product.offer.findOne'
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @param id Product Offer identifier (string/ObjectId)
-   * @returns Observable with the found Product Offer (including productBase)
+   * Retrieves a specific product offer by ID.
+   * Sends request to the NATS product service and returns the product offer data.
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
@@ -94,14 +83,8 @@ export class ProductOfferController {
   }
 
   /**
-   * Updates a Product Offer by its ID.
-   * Sends message pattern: 'product.offer.update'
-   * Payload shape: { id, updateProductOffer: UpdateProductOfferDto }
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @param id Product Offer identifier to update
-   * @param updateProductOfferDto Fields to update
-   * @returns Observable with the updated Product Offer (including productBase)
+   * Updates a product offer.
+   * Sends updated data to the NATS product service and returns the updated product offer.
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
@@ -123,12 +106,8 @@ export class ProductOfferController {
   }
 
   /**
-   * Removes a Product Offer by its ID.
-   * Sends message pattern: 'product.offer.remove'
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @param id Product Offer identifier to remove
-   * @returns Observable with deletion confirmation
+   * Deletes a product offer.
+   * Sends deletion request to the NATS product service.
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
