@@ -67,6 +67,15 @@ export class ProductBaseController {
     );
   }
 
+  @Get('categories')
+  getCategories() {
+    return this.natsClient.send('product.base.getCategories', {}).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
+  }
+
   /**
    * Retrieves a Product Base by its ID.
    * Sends message pattern: 'product.base.findOne'

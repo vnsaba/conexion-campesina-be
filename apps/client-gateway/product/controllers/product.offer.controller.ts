@@ -63,7 +63,7 @@ export class ProductOfferController {
    *
    * @returns Observable with the list of Product Offers (including productBase)
    */
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER, ValidRoles.CLIENT)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get('')
   findAllProductOffer() {

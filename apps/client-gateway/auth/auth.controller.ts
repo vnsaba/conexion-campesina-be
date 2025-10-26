@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Inject, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { LoginUserDto } from 'apps/auth-service/src/dto/login-user.dto';
 import { RegisterUserDto } from 'apps/auth-service/src/dto/register-user.dto';
@@ -48,5 +56,15 @@ export class AuthController {
   @UseGuards(AuthGuard, UserRoleGuard)
   ejemploAuth() {
     return 'Acceso concedido';
+  }
+
+  @Get('userinfo/:id')
+  // @UseGuards(AuthGuard)
+  getUserById(@Param('id') id: string) {
+    return this.natsClient.send('auth.get.user', id).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
   }
 }

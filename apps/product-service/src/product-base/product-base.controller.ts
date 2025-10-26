@@ -67,4 +67,9 @@ export class ProductBaseController {
   remove(@Payload() id: string) {
     return this.productBaseService.remove(id);
   }
+
+  @MessagePattern('product.base.getCategories')
+  getCategories() {
+    return this.productBaseService.getCategories();
+  }
 }
