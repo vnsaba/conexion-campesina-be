@@ -11,10 +11,6 @@ import { CreateOrderDetailsDto } from './create-order-details.dto';
 import { OrderStatusList } from '../enum/order.enum';
 
 export class CreateOrderDto {
-  @IsString()
-  @MinLength(1)
-  clientId: string;
-
   @IsEnum(OrderStatus, {
     message: `El status debe ser uno de los siguientes: ${OrderStatusList.join(', ')}`,
   })

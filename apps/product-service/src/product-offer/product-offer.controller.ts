@@ -67,4 +67,14 @@ export class ProductOfferController {
   remove(@Payload() id: string) {
     return this.productOfferService.remove(id);
   }
+
+  /**
+   * Validates if multiple product offers exist
+   * @param ids - Array of product offer IDs
+   * @returns Object with validation result and missing IDs if any
+   */
+  @MessagePattern('product.offer.validateMany')
+  validateMany(@Payload() ids: string[]) {
+    return this.productOfferService.validateMany(ids);
+  }
 }

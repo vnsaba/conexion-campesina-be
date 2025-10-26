@@ -10,8 +10,15 @@ export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @MessagePattern('order.create')
-  create(@Payload() createOrderDto: CreateOrderDto) {
-    return this.orderService.create(createOrderDto);
+  create(
+    @Payload()
+    payload: {
+      clientId: string;
+      createOrderDto: CreateOrderDto;
+    },
+  ) {
+    const { clientId, createOrderDto } = payload;
+    return this.orderService.create(clientId, createOrderDto);
   }
 
   @MessagePattern('order.findAll')

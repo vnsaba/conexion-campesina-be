@@ -13,9 +13,10 @@ import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { catchError } from 'rxjs';
 import { AuthGuard } from '../auth/guards/auth.guards';
 import { UserRoleGuard } from '../auth/guards/user-role.guard';
-import { RoleProtected } from '../auth/guards/decorators';
+import { RoleProtected, User } from '../auth/guards/decorators';
 import { ValidRoles } from '../auth/enum/valid-roles.enum';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/guards/interface/current-user.interface';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -30,12 +31,17 @@ export class OrderController {
   @RoleProtected(ValidRoles.CLIENT, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Post()
-  createOrder(@Body() createOrderDto: any) {
-    return this.natsClient.send('order.create', createOrderDto).pipe(
-      catchError((error) => {
-        throw new RpcException(error);
-      }),
-    );
+  createOrder(@User() user: CurrentUser, @Body() createOrderDto: any) {
+    return this.natsClient
+      .send('order.create', {
+        clientId: user.id,
+        createOrderDto,
+      })
+      .pipe(
+        catchError((error) => {
+          throw new RpcException(error);
+        }),
+      );
   }
 
   @RoleProtected(ValidRoles.ADMIN)
