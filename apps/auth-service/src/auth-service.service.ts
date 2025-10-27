@@ -21,10 +21,21 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
     super();
   }
 
+  /**
+   * Establishes connection to the Prisma database on module initialization.
+   */
   async onModuleInit() {
     await this.$connect();
   }
 
+  /**
+   * Registers a new user in the system.
+   * Validates unique email, hashes password, and stores user in the database.
+   *
+   * @param registerUserDto - User registration data.
+   * @returns The newly created user data (excluding password).
+   * @throws {RpcException} If email already exists or an unknown error occurs.
+   */
   async registerUser(registerUserDto: RegisterUserDto) {
     const { email, password, fullName, role } = registerUserDto;
 
@@ -54,30 +65,30 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password: __, ...newUserData } = newUser;
-
       return newUserData;
     } catch (error) {
       this.handleError(error);
     }
   }
 
-  private handleError(error: any) {
-    this.logger.error('Error occurred', error);
-
-    if (error instanceof RpcException) {
-      throw error;
-    }
-
-    throw new RpcException({
-      status: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: 'Unknown error occurred',
-    });
-  }
-
+  /**
+   * Generates a signed JWT token for the given payload.
+   *
+   * @param payload - The JWT payload containing user information.
+   * @returns A signed JWT token.
+   */
   signJWT(payload: JwtPayload) {
     return this.jwtService.sign(payload);
   }
 
+  /**
+   * Authenticates a user with their email and password.
+   * Verifies credentials, user status, and returns a signed token.
+   *
+   * @param loginUserDto - Login credentials (email and password).
+   * @returns An object containing the user data and JWT token.
+   * @throws {RpcException} If credentials are invalid or user is inactive.
+   */
   async loginUser(loginUserDto: LoginUserDto) {
     const { email, password } = loginUserDto;
 
@@ -107,7 +118,7 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      // eslint-disable-next-line
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password: __, ...userData } = user;
 
       return {
@@ -122,6 +133,14 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
     }
   }
 
+  /**
+   * Verifies and decodes a JWT token.
+   * Confirms that the token belongs to an active user.
+   *
+   * @param token - JWT token to verify.
+   * @returns An object containing the verified user and the token.
+   * @throws {RpcException} If the token is invalid or the user is inactive.
+   */
   async verifyToken(token: string) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -157,6 +176,14 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
     }
   }
 
+  /**
+   * Retrieves a user by their id.
+   * Removes the password field before returning.
+   *
+   * @param userId - The user's unique identifier to look up.
+   * @returns The user object without the password field.
+   * @throws {RpcException} If the user is not found or an internal error occurs.
+   */
   async getByUser(userId: string) {
     try {
       const user = await this.user.findUnique({ where: { id: userId } });
@@ -173,5 +200,25 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
     } catch (error) {
       this.handleError(error);
     }
+  }
+
+  /**
+   * Handles and logs unexpected errors.
+   * Throws an RPC exception with a consistent internal server response.
+   *
+   * @param error - The error to be handled.
+   * @throws {RpcException} Standardized RPC error.
+   */
+  private handleError(error: any) {
+    this.logger.error('Error occurred', error);
+
+    if (error instanceof RpcException) {
+      throw error;
+    }
+
+    throw new RpcException({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: 'Unknown error occurred',
+    });
   }
 }
