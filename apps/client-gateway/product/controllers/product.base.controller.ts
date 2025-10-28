@@ -61,8 +61,28 @@ export class ProductBaseController {
   }
 
   /**
-   * Retrieves a specific product base by ID.
-   * Sends request to the NATS product service and returns the product base data.
+   * Retrieves the list of categories defined in the Product service enum.
+   * Sends message pattern: 'product.base.getCategories'
+   *
+   * @returns Observable<Category[]> Observable that resolves with the array of category strings.
+   * @throws RpcException if the microservice call fails.
+   */
+  @Get('categories')
+  getCategories() {
+    return this.natsClient.send('product.base.getCategories', {}).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
+  }
+
+  /**
+   * Retrieves a Product Base by its ID.
+   * Sends message pattern: 'product.base.findOne'
+   * Authorization: ADMIN or PRODUCER
+   *
+   * @param id Product Base identifier (string/ObjectId)
+   * @returns Observable with the found Product Base
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)

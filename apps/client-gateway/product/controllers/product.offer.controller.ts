@@ -56,7 +56,7 @@ export class ProductOfferController {
    * Retrieves all product offers.
    * Sends request to the NATS product service and returns the list of product offers.
    */
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER, ValidRoles.CLIENT)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get('')
   findAllProductOffer() {
