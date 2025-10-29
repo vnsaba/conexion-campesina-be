@@ -4,9 +4,6 @@ import { PrismaClient } from '../../generated/prisma';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 
-/**
- * Service responsible for managing Unit entities
- */
 @Injectable()
 export class UnitService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger('UnitService');
