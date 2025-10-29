@@ -10,8 +10,15 @@ export class ProductOfferController {
   constructor(private readonly productOfferService: ProductOfferService) {}
 
   @MessagePattern('product.offer.create')
-  create(@Payload() createProductOfferDto: CreateProductOfferDto) {
-    return this.productOfferService.create(createProductOfferDto);
+  create(
+    @Payload()
+    createdPayload: {
+      createProductOfferDto: CreateProductOfferDto;
+      producerId: string;
+    },
+  ) {
+    const { createProductOfferDto, producerId } = createdPayload;
+    return this.productOfferService.create(createProductOfferDto, producerId);
   }
 
   @MessagePattern('product.offer.findAll')
@@ -39,5 +46,10 @@ export class ProductOfferController {
   @MessagePattern('product.offer.remove')
   remove(@Payload() id: string) {
     return this.productOfferService.remove(id);
+  }
+
+  @MessagePattern('product.offer.findAllProducer')
+  findAllProduct(@Payload() producerId: string) {
+    return this.productOfferService.findAllProduct(producerId);
   }
 }

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { RpcException } from '@nestjs/microservices';
 import { ProductOfferService } from '../src/product-offer/product-offer.service';
 import { Category } from '../generated/prisma';
+import { CreateProductOfferDto } from '../src/product-offer/dto/create-product-offer.dto';
 
 describe('ProductOfferService', () => {
   let service: ProductOfferService;
@@ -102,9 +103,9 @@ describe('ProductOfferService', () => {
         new Error('Price validation failed'),
       );
 
-      await expect(service.create(dto as any)).rejects.toBeInstanceOf(
-        RpcException,
-      );
+      await expect(
+        service.create(dto as CreateProductOfferDto, dto.producerId),
+      ).rejects.toBeInstanceOf(RpcException);
     });
 
     it('should succeed when price is 1 (minimum boundary)', async () => {
@@ -119,7 +120,10 @@ describe('ProductOfferService', () => {
         price: 1,
       });
 
-      const result = await service.create(dto as any);
+      const result = await service.create(
+        dto as CreateProductOfferDto,
+        dto.producerId,
+      );
       expect(result.price).toBe(1);
     });
 
@@ -135,7 +139,10 @@ describe('ProductOfferService', () => {
         price: 5000,
       });
 
-      const result = await service.create(dto as any);
+      const result = await service.create(
+        dto as CreateProductOfferDto,
+        dto.producerId,
+      );
       expect(result.price).toBe(5000);
     });
   });
@@ -152,9 +159,9 @@ describe('ProductOfferService', () => {
         new Error('Quantity validation failed'),
       );
 
-      await expect(service.create(dto as any)).rejects.toBeInstanceOf(
-        RpcException,
-      );
+      await expect(
+        service.create(dto as CreateProductOfferDto, dto.producerId),
+      ).rejects.toBeInstanceOf(RpcException);
     });
 
     it('should succeed when quantity is 1 (minimum boundary)', async () => {
@@ -169,7 +176,10 @@ describe('ProductOfferService', () => {
         quantity: 1,
       });
 
-      const result = await service.create(dto as any);
+      const result = await service.create(
+        dto as CreateProductOfferDto,
+        dto.producerId,
+      );
       expect(result.quantity).toBe(1);
     });
 
@@ -185,7 +195,10 @@ describe('ProductOfferService', () => {
         quantity: 50,
       });
 
-      const result = await service.create(dto as any);
+      const result = await service.create(
+        dto as CreateProductOfferDto,
+        dto.producerId,
+      );
       expect(result.quantity).toBe(50);
     });
   });
@@ -201,7 +214,10 @@ describe('ProductOfferService', () => {
         mockProductOffer,
       );
 
-      const result = await service.create(createDto);
+      const result = await service.create(
+        createDto as CreateProductOfferDto,
+        createDto.producerId,
+      );
       expect(result).toEqual(mockProductOffer);
       expect(result.productBase).toBeDefined();
     });
@@ -209,10 +225,18 @@ describe('ProductOfferService', () => {
     it('should fail when ProductBase does not exist', async () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.create(createDto)).rejects.toBeInstanceOf(
-        RpcException,
-      );
-      await expect(service.create(createDto)).rejects.toMatchObject({
+      await expect(
+        service.create(
+          createDto as CreateProductOfferDto,
+          createDto.producerId,
+        ),
+      ).rejects.toBeInstanceOf(RpcException);
+      await expect(
+        service.create(
+          createDto as CreateProductOfferDto,
+          createDto.producerId,
+        ),
+      ).rejects.toMatchObject({
         error: expect.objectContaining({
           message: expect.stringContaining('ProductBase'),
         }),
@@ -231,7 +255,10 @@ describe('ProductOfferService', () => {
         mockProductOffer,
       );
 
-      const result = await service.create(createDto);
+      const result = await service.create(
+        createDto as CreateProductOfferDto,
+        createDto.producerId,
+      );
       expect(result.unit).toBeDefined();
       expect(result.unitId).toBe(mockUnit.id);
     });
@@ -242,10 +269,18 @@ describe('ProductOfferService', () => {
       );
       (service.unit.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.create(createDto)).rejects.toBeInstanceOf(
-        RpcException,
-      );
-      await expect(service.create(createDto)).rejects.toMatchObject({
+      await expect(
+        service.create(
+          createDto as CreateProductOfferDto,
+          createDto.producerId,
+        ),
+      ).rejects.toBeInstanceOf(RpcException);
+      await expect(
+        service.create(
+          createDto as CreateProductOfferDto,
+          createDto.producerId,
+        ),
+      ).rejects.toMatchObject({
         error: expect.objectContaining({
           message: expect.stringContaining('Unit'),
         }),
@@ -275,8 +310,14 @@ describe('ProductOfferService', () => {
         .mockResolvedValueOnce({ ...mockProductOffer, ...offer1 })
         .mockResolvedValueOnce({ ...mockProductOffer, ...offer2 });
 
-      const result1 = await service.create(offer1);
-      const result2 = await service.create(offer2);
+      const result1 = await service.create(
+        offer1 as CreateProductOfferDto,
+        offer1.producerId,
+      );
+      const result2 = await service.create(
+        offer2 as CreateProductOfferDto,
+        offer2.producerId,
+      );
 
       expect(result1.productBaseId).toBe(result2.productBaseId);
       expect(result1.producerId).not.toBe(result2.producerId);
@@ -291,10 +332,18 @@ describe('ProductOfferService', () => {
         mockProductOffer,
       );
 
-      await expect(service.create(createDto)).rejects.toBeInstanceOf(
-        RpcException,
-      );
-      await expect(service.create(createDto)).rejects.toMatchObject({
+      await expect(
+        service.create(
+          createDto as CreateProductOfferDto,
+          createDto.producerId,
+        ),
+      ).rejects.toBeInstanceOf(RpcException);
+      await expect(
+        service.create(
+          createDto as CreateProductOfferDto,
+          createDto.producerId,
+        ),
+      ).rejects.toMatchObject({
         error: expect.objectContaining({
           message: expect.stringContaining('already exists'),
         }),
@@ -388,6 +437,35 @@ describe('ProductOfferService', () => {
       (service.productOffer.findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(service.remove('nonexistent-id')).rejects.toBeInstanceOf(
+        RpcException,
+      );
+    });
+  });
+
+  describe('findAllProduct', () => {
+    it('should return all product offers for a producer', async () => {
+      const producerId = 'producer123';
+      const mockOffers = [mockProductOffer];
+      (service.productOffer.findMany as jest.Mock).mockResolvedValue(
+        mockOffers,
+      );
+
+      const result = await service.findAllProduct(producerId);
+      expect(result).toEqual(mockOffers);
+      expect(service.productOffer.findMany).toHaveBeenCalledWith({
+        where: { producerId },
+        include: { productBase: true, unit: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    });
+
+    it('should throw RpcException on database error', async () => {
+      const producerId = 'producer123';
+      (service.productOffer.findMany as jest.Mock).mockRejectedValue(
+        new Error('DB error'),
+      );
+
+      await expect(service.findAllProduct(producerId)).rejects.toBeInstanceOf(
         RpcException,
       );
     });

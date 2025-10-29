@@ -22,15 +22,6 @@ export class CreateProductOfferDto {
   productBaseId: string;
 
   /**
-   * Producer identifier.
-   * References the user who is offering the product.
-   * @example "507f1f77bcf86cd799439012"
-   */
-  @IsString()
-  @MinLength(1)
-  producerId: string;
-
-  /**
    * Product offer name.
    * Must be between 2 and 100 characters.
    * @example "Tomate Orgánico Chonto"

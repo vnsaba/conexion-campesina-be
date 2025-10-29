@@ -16,9 +16,13 @@ import { AuthGuard } from 'apps/client-gateway/auth/guards/auth.guards';
 import { UserRoleGuard } from 'apps/client-gateway/auth/guards/user-role.guard';
 import { CreateProductOfferDto } from 'apps/product-service/src/product-offer/dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from 'apps/product-service/src/product-offer/dto/update-product-offer.dto';
-import { RoleProtected } from 'apps/client-gateway/auth/guards/decorators';
+import {
+  RoleProtected,
+  User,
+} from 'apps/client-gateway/auth/guards/decorators';
 import { ValidRoles } from '../../auth/enum/valid-roles.enum';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { CurrentUser } from 'apps/client-gateway/auth/guards/interface/current-user.interface';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -42,9 +46,15 @@ export class ProductOfferController {
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Post('')
-  createProductOffer(@Body() createProductOfferDto: CreateProductOfferDto) {
+  createProductOffer(
+    @User() user: CurrentUser,
+    @Body() createProductOfferDto: CreateProductOfferDto,
+  ) {
     return this.natsClient
-      .send('product.offer.create', createProductOfferDto)
+      .send('product.offer.create', {
+        createProductOfferDto,
+        producerId: user.id,
+      })
       .pipe(
         catchError((error) => {
           throw new RpcException(error);
@@ -56,7 +66,7 @@ export class ProductOfferController {
    * Retrieves all product offers.
    * Sends request to the NATS product service and returns the list of product offers.
    */
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER, ValidRoles.CLIENT)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get('')
   findAllProductOffer() {
@@ -71,7 +81,7 @@ export class ProductOfferController {
    * Retrieves a specific product offer by ID.
    * Sends request to the NATS product service and returns the product offer data.
    */
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER, ValidRoles.CLIENT)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get(':id')
   findOneProductOffer(@Param('id') id: string) {
@@ -114,6 +124,21 @@ export class ProductOfferController {
   @Delete(':id')
   removeProductOffer(@Param('id') id: string) {
     return this.natsClient.send('product.offer.remove', id).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
+  }
+
+  /**
+   * Retrieves all product offers for the authenticated producer.
+   * Sends request to the NATS product service and returns the producer's offers.
+   */
+  @RoleProtected(ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get('get/producer')
+  findAllProducerOffers(@User() user: CurrentUser) {
+    return this.natsClient.send('product.offer.findAllProducer', user.id).pipe(
       catchError((error) => {
         throw new RpcException(error);
       }),
