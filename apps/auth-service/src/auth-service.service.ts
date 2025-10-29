@@ -177,6 +177,32 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
   }
 
   /**
+   * Retrieves a user by their id.
+   * Removes the password field before returning.
+   *
+   * @param userId - The user's unique identifier to look up.
+   * @returns The user object without the password field.
+   * @throws {RpcException} If the user is not found or an internal error occurs.
+   */
+  async getByUser(userId: string) {
+    try {
+      const user = await this.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: `User with id '${userId}' not found`,
+        });
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...restUser } = user;
+
+      return restUser;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
    * Handles and logs unexpected errors.
    * Throws an RPC exception with a consistent internal server response.
    *
