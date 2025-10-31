@@ -1,9 +1,32 @@
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { OrderServiceModule } from './order-service.module';
 
+const NATS_SERVERS = process.env.NATS_SERVERS?.split(',');
+
 async function bootstrap() {
-  const app = await NestFactory.create(OrderServiceModule);
-  await app.listen(process.env.port ?? 3000);
+  const logger = new Logger('OrderService');
+
+  const app = await NestFactory.createMicroservice<MicroserviceOptions>(
+    OrderServiceModule,
+    {
+      transport: Transport.NATS,
+      options: {
+        servers: NATS_SERVERS,
+      },
+    },
+  );
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
+  await app.listen();
+  logger.log('Order Service is running');
 }
 
 void bootstrap();

@@ -273,8 +273,8 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       });
     }
   }
-
-  /**
+  
+    /**
    * Returns all product offers for a specific producer including their ProductBase and Unit
    * @param producerId - The producer's identifier
    * @returns Array of product offers for the specified producer ordered by creation date (newest first)
@@ -295,6 +295,46 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
     } catch (error: unknown) {
       this.logger.error(
         'Error retrieving product offers',
+        (error as Error).stack,
+      );
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to retrieve product offers',
+      });
+    }
+  }
+}
+
+  /**
+   * Validates if multiple product offers exist
+   * @param ids - Array of product offer IDs to validate
+   * @returns Object with validation result and missing IDs if any
+   */
+  async validateMany(
+    ids: string[],
+  ): Promise<{ valid: boolean; missingIds: string[] }> {
+    try {
+      const productOffers = await this.productOffer.findMany({
+        where: {
+          id: {
+            in: ids,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const foundIds = productOffers.map((po) => po.id);
+      const missingIds = ids.filter((id) => !foundIds.includes(id));
+
+      return {
+        valid: missingIds.length === 0,
+        missingIds,
+      };
+    } catch (error: unknown) {
+      this.logger.error(
+        'Error validating product offers',
         (error as Error).stack,
       );
       throw new RpcException({

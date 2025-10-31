@@ -71,10 +71,6 @@ $ npx prisma generate --schema=apps/product-service/prisma/schema.prisma
 $ nest start auth-service --watch
 ```
 
-```bash
-$ nest start product-service --watch
-```
-
 You can run the other microservices with that same command, replacing 'auth-service' with the name of the microservice
 
 ## Run tests
