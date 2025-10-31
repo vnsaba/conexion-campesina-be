@@ -18,23 +18,10 @@ import { CreateUnitDto } from 'apps/product-service/src/unit/dto/create-unit.dto
 import { UpdateUnitDto } from 'apps/product-service/src/unit/dto/update-unit.dto';
 import { RoleProtected } from 'apps/client-gateway/auth/guards/decorators';
 import { ValidRoles } from '../../auth/enum/valid-roles.enum';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-  ApiBody,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
-/**
- * Exposes REST endpoints to manage Unit entities.
- * Proxies requests to product-service via NATS message patterns (product.*Unit).
- * Protected by AuthGuard and restricted by RolesGuard.
- */
-@ApiTags('Units')
 @ApiBearerAuth('bearer')
 @Controller('product/unit')
 export class UnitController {
@@ -44,14 +31,9 @@ export class UnitController {
   ) {}
 
   /**
-   * Creates a new Unit.
-   * Sends message pattern: 'product.createUnit'
-   * Authorization: ADMIN only
+   * Creates a new unit.
+   * Sends unit data to the NATS product service for unit creation.
    */
-  @ApiOperation({ summary: 'Create a new unit' })
-  @ApiBody({ type: CreateUnitDto })
-  @ApiResponse({ status: 201, description: 'Unit created successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid data or duplicate name' })
   @RoleProtected(ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Post('')
@@ -64,12 +46,9 @@ export class UnitController {
   }
 
   /**
-   * Retrieves all Units.
-   * Sends message pattern: 'product.findAllUnit'
-   * Authorization: ADMIN or PRODUCER
+   * Retrieves all units.
+   * Sends request to the NATS product service and returns the list of units.
    */
-  @ApiOperation({ summary: 'Retrieve all available units' })
-  @ApiResponse({ status: 200, description: 'List of all units' })
   @RoleProtected(ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get('')
@@ -82,14 +61,9 @@ export class UnitController {
   }
 
   /**
-   * Retrieves a Unit by its ID.
-   * Sends message pattern: 'product.findOneUnit'
-   * Authorization: ADMIN or PRODUCER
+   * Retrieves a specific unit by ID.
+   * Sends request to the NATS product service and returns the unit data.
    */
-  @ApiOperation({ summary: 'Retrieve a unit by ID' })
-  @ApiParam({ name: 'id', description: 'Unit ID' })
-  @ApiResponse({ status: 200, description: 'Unit found' })
-  @ApiResponse({ status: 404, description: 'Unit not found' })
   @RoleProtected(ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get(':id')
@@ -102,21 +76,13 @@ export class UnitController {
   }
 
   /**
-   * Updates a Unit by its ID.
-   * Sends message pattern: 'product.updateUnit'
-   * Payload shape: { id, ...updateUnitDto }
-   * Authorization: ADMIN only
+   * Updates a unit.
+   * Sends updated data to the NATS product service and returns the updated unit.
    */
-  @ApiOperation({ summary: 'Update a unit by ID' })
-  @ApiParam({ name: 'id', description: 'Unit ID to update' })
-  @ApiBody({ type: UpdateUnitDto })
-  @ApiResponse({ status: 200, description: 'Unit updated successfully' })
-  @ApiResponse({ status: 404, description: 'Unit not found' })
   @RoleProtected(ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Patch(':id')
   updateUnit(@Param('id') id: string, @Body() updateUnitDto: UpdateUnitDto) {
-    console.log('Updating unit with ID:', id, 'Data:', updateUnitDto);
     return this.natsClient
       .send('product.updateUnit', {
         id,
@@ -130,14 +96,9 @@ export class UnitController {
   }
 
   /**
-   * Removes a Unit by its ID.
-   * Sends message pattern: 'product.removeUnit'
-   * Authorization: ADMIN only
+   * Deletes a unit.
+   * Sends deletion request to the NATS product service.
    */
-  @ApiOperation({ summary: 'Delete a unit by ID' })
-  @ApiParam({ name: 'id', description: 'Unit ID to delete' })
-  @ApiResponse({ status: 200, description: 'Unit deleted successfully' })
-  @ApiResponse({ status: 404, description: 'Unit not found' })
   @RoleProtected(ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Delete(':id')

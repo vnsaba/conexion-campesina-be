@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Inject, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { LoginUserDto } from 'apps/auth-service/src/dto/login-user.dto';
 import { RegisterUserDto } from 'apps/auth-service/src/dto/register-user.dto';
@@ -52,5 +60,26 @@ export class AuthController {
   @Get('verify')
   verifyToken(@User() user: CurrentUser, @Token() token: string) {
     return { user, token };
+  }
+
+  /**
+   * Retrieve user information by id.
+   *
+   * Protected by AuthGuard: a valid JWT must be provided in the request.
+   * Forwards the request to the auth microservice using the NATS pattern 'auth.get.user'.
+   *
+   * @param id - The user's id to look up (string).
+   * @returns Observable resolved with the user object returned by the auth service
+   *          (the auth service should omit the password).
+   * @throws RpcException if the microservice call fails or returns an error.
+   */
+  @Get('userinfo/:id')
+  @UseGuards(AuthGuard)
+  getUserById(@Param('id') id: string) {
+    return this.natsClient.send('auth.get.user', id).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
   }
 }

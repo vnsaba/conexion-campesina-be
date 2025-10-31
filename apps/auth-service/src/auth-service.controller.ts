@@ -22,4 +22,9 @@ export class AuthServiceController {
   verifyToken(@Payload() token: string) {
     return this.authServiceService.verifyToken(token);
   }
+
+  @MessagePattern('auth.get.user')
+  getUser(@Payload() userId: string) {
+    return this.authServiceService.getByUser(userId);
+  }
 }

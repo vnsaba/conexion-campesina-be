@@ -7,13 +7,10 @@ import {
 } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 
-import { PrismaClient } from '../../generated/prisma';
+import { PrismaClient, Category } from '../../generated/prisma';
 import { CreateProductBaseDto } from './dto/create-product-base.dto';
 import { UpdateProductBaseDto } from './dto/update-product-base.dto';
 
-/**
- * Service responsible for managing ProductBase entities
- */
 @Injectable()
 export class ProductBaseService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger('ProductBaseService');
@@ -213,6 +210,19 @@ export class ProductBaseService extends PrismaClient implements OnModuleInit {
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to delete product base',
+      });
+    }
+  }
+
+  getCategories(): Category[] {
+    try {
+      return Object.values(Category).filter(
+        (v) => typeof v === 'string',
+      ) as Category[];
+    } catch (error) {
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: (error as Error).message,
       });
     }
   }

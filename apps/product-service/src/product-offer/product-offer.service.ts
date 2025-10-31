@@ -28,18 +28,19 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Creates a new product offer and returns it including its ProductBase and Unit
-   * @param createProductOfferDto - Data transfer object containing product offer information
+   * Creates a new product offer
+   * @param createProductOfferDto - Data Transfer Object for creating a product offer
+   * @param producerId - The identifier of the producer creating the offer
    * @returns The created product offer with its associated ProductBase and Unit
-   * @throws {RpcException} If ProductBase doesn't exist
-   * @throws {RpcException} If Unit doesn't exist
-   * @throws {RpcException} If a product offer with the same name, producerId and productBaseId already exists
+   * @throws {RpcException} If the referenced ProductBase or Unit does not exist
+   * @throws {RpcException} If a product offer with the same name already exists for the producer and product base
    * @throws {RpcException} If there's a database error during creation
    */
   async create(
     createProductOfferDto: CreateProductOfferDto,
+    producerId: string,
   ): Promise<ProductOfferWithRelations> {
-    const { productBaseId, producerId, name, unitId } = createProductOfferDto;
+    const { productBaseId, name, unitId } = createProductOfferDto;
 
     try {
       const productBase = await this.productBase.findUnique({
@@ -78,7 +79,7 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       const createdProductOffer = await this.productOffer.create({
         data: {
           ...createProductOfferDto,
-          isAvailable: createProductOfferDto.isAvailable ?? true,
+          producerId,
         },
         include: {
           productBase: true,
@@ -127,7 +128,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       });
     }
   }
-
   /**
    * Returns a product offer by id including its ProductBase and Unit
    * @param id - The MongoDB ObjectId of the product offer
@@ -273,6 +273,37 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       });
     }
   }
+  
+    /**
+   * Returns all product offers for a specific producer including their ProductBase and Unit
+   * @param producerId - The producer's identifier
+   * @returns Array of product offers for the specified producer ordered by creation date (newest first)
+   * @throws {RpcException} If there's a database error during retrieval
+   */
+  async findAllProduct(
+    producerId: string,
+  ): Promise<ProductOfferWithRelations[]> {
+    try {
+      return await this.productOffer.findMany({
+        where: { producerId },
+        include: {
+          productBase: true,
+          unit: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (error: unknown) {
+      this.logger.error(
+        'Error retrieving product offers',
+        (error as Error).stack,
+      );
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to retrieve product offers',
+      });
+    }
+  }
+}
 
   /**
    * Validates if multiple product offers exist
@@ -308,7 +339,7 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       );
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: 'Failed to validate product offers',
+        message: 'Failed to retrieve product offers',
       });
     }
   }
