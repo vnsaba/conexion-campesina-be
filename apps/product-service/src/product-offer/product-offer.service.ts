@@ -313,4 +313,72 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       });
     }
   }
+
+  async findAllProductOffersByName(
+    name: string,
+  ): Promise<ProductOfferWithRelations[]> {
+    try {
+      const productOffers = await this.productOffer.findMany({
+        where: {
+          name: {
+            contains: name,
+            mode: 'insensitive',
+          },
+        },
+        include: {
+          productBase: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      this.logger.log(
+        `Product offers retrieved by name '${name}': ${productOffers.length}`,
+      );
+      return productOffers;
+    } catch (error: unknown) {
+      this.logger.error(
+        `Error retrieving product offers by name '${name}'`,
+        (error as Error).stack,
+      );
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to retrieve product offers by name',
+      });
+    }
+  }
+
+  async findAllProductOffersByCategory(
+    category: string,
+  ): Promise<ProductOfferWithRelations[]> {
+    try {
+      const cat = (category || '').toUpperCase();
+
+      const productOffers = await this.productOffer.findMany({
+        where: {
+          productBase: {
+            is: {
+              category: cat as any,
+            },
+          },
+        },
+        include: { productBase: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      this.logger.log(
+        `Product offers retrieved by category '${cat}': ${productOffers.length}`,
+      );
+
+      return productOffers;
+    } catch (error: unknown) {
+      this.logger.error(
+        `Error retrieving product offers by category '${category}'`,
+        (error as Error).stack,
+      );
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to retrieve product offers by category',
+      });
+    }
+  }
 }
