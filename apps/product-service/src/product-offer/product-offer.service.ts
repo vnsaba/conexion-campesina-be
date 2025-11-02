@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 
-import { Prisma, PrismaClient } from '../../generated/prisma';
+import { Category, Prisma, PrismaClient } from '../../generated/prisma';
 import { CreateProductOfferDto } from './dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from './dto/update-product-offer.dto';
 
@@ -331,15 +331,14 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         orderBy: { createdAt: 'desc' },
       });
 
-      this.logger.log(
-        `Product offers retrieved by name '${name}': ${productOffers.length}`,
-      );
       return productOffers;
     } catch (error: unknown) {
       this.logger.error(
         `Error retrieving product offers by name '${name}'`,
         (error as Error).stack,
       );
+      if (error instanceof RpcException) throw error;
+
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to retrieve product offers by name',
@@ -351,13 +350,25 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
     category: string,
   ): Promise<ProductOfferWithRelations[]> {
     try {
-      const cat = (category || '').toUpperCase();
+      if (!category) {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Category is required',
+        });
+      }
 
+      const validCategories = Object.values(Category) as string[];
+      if (!validCategories.includes(category.toLocaleUpperCase())) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: `Category '${category}' not found`,
+        });
+      }
       const productOffers = await this.productOffer.findMany({
         where: {
           productBase: {
             is: {
-              category: cat as any,
+              category: category.toLocaleUpperCase() as Category,
             },
           },
         },
@@ -365,16 +376,10 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         orderBy: { createdAt: 'desc' },
       });
 
-      this.logger.log(
-        `Product offers retrieved by category '${cat}': ${productOffers.length}`,
-      );
-
       return productOffers;
     } catch (error: unknown) {
-      this.logger.error(
-        `Error retrieving product offers by category '${category}'`,
-        (error as Error).stack,
-      );
+      if (error instanceof RpcException) throw error;
+
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to retrieve product offers by category',

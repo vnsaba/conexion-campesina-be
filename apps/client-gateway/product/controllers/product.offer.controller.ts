@@ -83,7 +83,7 @@ export class ProductOfferController {
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
   @UseGuards(AuthGuard, UserRoleGuard)
-  @Get('name/:name')
+  @Get(':name')
   findAllProductOffersByName(@Param('name') name: string) {
     return this.natsClient.send('product.offer.searchByName', name).pipe(
       catchError((error) => {
@@ -98,7 +98,7 @@ export class ProductOfferController {
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
   @UseGuards(AuthGuard, UserRoleGuard)
-  @Get('category/:category')
+  @Get(':category')
   findAllProductOffersByCategory(@Param('category') category: string) {
     return this.natsClient
       .send('product.offer.searchByCategory', category)
