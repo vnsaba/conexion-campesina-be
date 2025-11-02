@@ -1,245 +1,173 @@
-// import { Test, TestingModule } from '@nestjs/testing';
-// import { HttpStatus } from '@nestjs/common';
-// import { RpcException } from '@nestjs/microservices';
-// import { ProductBaseService } from '../src/product-base/product-base.service';
-// import { Category } from '../generated/prisma';
+import { Test, TestingModule } from '@nestjs/testing';
+import { RpcException } from '@nestjs/microservices';
+import { ProductBaseService } from '../src/product-base/product-base.service';
+import { Category } from '../generated/prisma';
 
-// describe('ProductBaseService', () => {
-//   let service: ProductBaseService;
+describe('ProductBaseService', () => {
+  let service: ProductBaseService;
 
-//   const mockProductBase = {
-//     id: '507f1f77bcf86cd799439011',
-//     name: 'Tomato',
-//     category: Category.VEGETABLES,
-//     offers: [],
-//   };
+  const mockProductBase = {
+    id: '507f1f77bcf86cd799439011',
+    name: 'Tomato',
+    category: Category.VERDURAS,
+    offers: [],
+  } as any;
 
-//   const createDto = {
-//     name: 'Tomato',
-//     category: Category.VEGETABLES,
-//   };
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [ProductBaseService],
+    }).compile();
 
-//   beforeEach(async () => {
-//     const module: TestingModule = await Test.createTestingModule({
-//       providers: [ProductBaseService],
-//     }).compile();
+    service = module.get<ProductBaseService>(ProductBaseService);
 
-//     service = module.get<ProductBaseService>(ProductBaseService);
+    // prevent real DB connections
+    service.$connect = jest.fn().mockResolvedValue(undefined) as any;
+    service.$disconnect = jest.fn().mockResolvedValue(undefined) as any;
+    // mock prisma models used by the service by defining properties
+    Object.defineProperty(service, 'productBase', {
+      value: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
+      writable: false,
+    });
+    Object.defineProperty(service, 'productOffer', {
+      value: {
+        count: jest.fn(),
+      },
+      writable: false,
+    });
+  });
 
-//     service.$connect = jest.fn().mockResolvedValue(undefined);
-//     service.$disconnect = jest.fn().mockResolvedValue(undefined);
-//   });
+  afterEach(async () => {
+    await service.$disconnect();
+    jest.clearAllMocks();
+  });
 
-//   afterEach(async () => {
-//     await service.$disconnect();
-//     jest.clearAllMocks();
-//   });
+  describe('create - name length boundaries and uniqueness', () => {
+    it('should fail when name length is below minimum (1)', async () => {
+      const dto = { name: 'A', category: Category.VERDURAS };
+      jest.spyOn(service.productBase, 'findFirst').mockResolvedValue(null);
 
-//   describe('create', () => {
-//     it('should successfully create a product base', async () => {
-//       const findFirstSpy = jest
-//         .spyOn(service.productBase, 'findFirst')
-//         .mockResolvedValue(null);
-//       const createSpy = jest
-//         .spyOn(service.productBase, 'create')
-//         .mockResolvedValue(mockProductBase as any);
+      await expect(service.create(dto as any)).rejects.toBeInstanceOf(
+        RpcException,
+      );
+    });
 
-//       const result = await service.create(createDto);
+    it('should succeed when name length equals minimum (2)', async () => {
+      const dto = { name: 'AB', category: Category.VERDURAS };
+      jest.spyOn(service.productBase, 'findFirst').mockResolvedValue(null);
+      jest
+        .spyOn(service.productBase, 'create')
+        .mockResolvedValue({ ...mockProductBase, name: dto.name });
 
-//       expect(result).toEqual(mockProductBase);
-//       expect(findFirstSpy).toHaveBeenCalledWith({
-//         where: { name: createDto.name, category: createDto.category },
-//       });
-//       expect(createSpy).toHaveBeenCalledWith({
-//         data: createDto,
-//       });
-//     });
+      const result = await service.create(dto as any);
+      expect(result.name).toBe(dto.name);
+    });
 
-//     it('should throw RpcException when product base already exists', async () => {
-//       jest
-//         .spyOn(service.productBase, 'findFirst')
-//         .mockResolvedValue(mockProductBase as any);
+    it('should succeed when name length is above minimum (3)', async () => {
+      const dto = { name: 'ABC', category: Category.VERDURAS };
+      jest.spyOn(service.productBase, 'findFirst').mockResolvedValue(null);
+      jest
+        .spyOn(service.productBase, 'create')
+        .mockResolvedValue({ ...mockProductBase, name: dto.name });
 
-//       try {
-//         await service.create(createDto);
-//         fail('Should have thrown RpcException');
-//       } catch (error) {
-//         expect(error).toBeInstanceOf(RpcException);
-//         expect(error.message).toContain('already exists');
-//       }
-//     });
+      const result = await service.create(dto as any);
+      expect(result.name).toBe(dto.name);
+    });
 
-//     it('should throw RpcException on database error', async () => {
-//       jest.spyOn(service.productBase, 'findFirst').mockResolvedValue(null);
-//       jest
-//         .spyOn(service.productBase, 'create')
-//         .mockRejectedValue(new Error('Database error'));
+    it('should fail when product base name already exists', async () => {
+      const dto = {
+        name: mockProductBase.name,
+        category: mockProductBase.category,
+      };
+      jest
+        .spyOn(service.productBase, 'findFirst')
+        .mockResolvedValue(mockProductBase);
 
-//       try {
-//         await service.create(createDto);
-//         fail('Should have thrown RpcException');
-//       } catch (error) {
-//         expect(error).toBeInstanceOf(RpcException);
-//       }
-//     });
-//   });
+      await expect(service.create(dto as any)).rejects.toBeInstanceOf(
+        RpcException,
+      );
+    });
+  });
 
-//   describe('findAll', () => {
-//     it('should return all product bases', async () => {
-//       const mockProductBases = [mockProductBase];
-//       const findManySpy = jest
-//         .spyOn(service.productBase, 'findMany')
-//         .mockResolvedValue(mockProductBases as any);
+  describe('findAll', () => {
+    it('should return product bases', async () => {
+      jest
+        .spyOn(service.productBase, 'findMany')
+        .mockResolvedValue([mockProductBase]);
+      const result = await service.findAll();
+      expect(result).toEqual([mockProductBase]);
+    });
 
-//       const result = await service.findAll();
+    it('should throw on DB error', async () => {
+      jest
+        .spyOn(service.productBase, 'findMany')
+        .mockRejectedValue(new Error('DB error'));
+      await expect(service.findAll()).rejects.toBeInstanceOf(RpcException);
+    });
+  });
 
-//       expect(result).toEqual(mockProductBases);
-//       expect(findManySpy).toHaveBeenCalledWith({
-//         orderBy: { name: 'asc' },
-//       });
-//     });
+  describe('findOne', () => {
+    it('should return product base by id', async () => {
+      jest
+        .spyOn(service.productBase, 'findUnique')
+        .mockResolvedValue(mockProductBase);
+      const res = await service.findOne(mockProductBase.id);
+      expect(res).toEqual(mockProductBase);
+    });
 
-//     it('should throw RpcException on database error', async () => {
-//       jest
-//         .spyOn(service.productBase, 'findMany')
-//         .mockRejectedValue(new Error('Database error'));
+    it('should fail when not found', async () => {
+      jest.spyOn(service.productBase, 'findUnique').mockResolvedValue(null);
+      await expect(service.findOne('nonexistent')).rejects.toBeInstanceOf(
+        RpcException,
+      );
+    });
+  });
 
-//       try {
-//         await service.findAll();
-//         fail('Should have thrown RpcException');
-//       } catch (error) {
-//         expect(error).toBeInstanceOf(RpcException);
-//       }
-//     });
-//   });
+  describe('update', () => {
+    const updateDto = { name: 'Updated' };
 
-//   describe('findOne', () => {
-//     it('should return a product base by id', async () => {
-//       const findUniqueSpy = jest
-//         .spyOn(service.productBase, 'findUnique')
-//         .mockResolvedValue(mockProductBase as any);
+    it('should update successfully', async () => {
+      jest.spyOn(service, 'findOne' as any).mockResolvedValue(mockProductBase);
+      jest
+        .spyOn(service.productBase, 'update')
+        .mockResolvedValue({ ...mockProductBase, ...updateDto });
+      const res = await service.update(mockProductBase.id, updateDto as any);
+      expect(res.name).toBe(updateDto.name);
+    });
 
-//       const result = await service.findOne(mockProductBase.id);
+    it('should fail when no fields provided', async () => {
+      await expect(
+        service.update(mockProductBase.id, {} as any),
+      ).rejects.toBeInstanceOf(RpcException);
+    });
+  });
 
-//       expect(result).toEqual(mockProductBase);
-//       expect(findUniqueSpy).toHaveBeenCalledWith({
-//         where: { id: mockProductBase.id },
-//         include: { offers: true },
-//       });
-//     });
+  describe('remove', () => {
+    it('should delete when no offers exist', async () => {
+      jest.spyOn(service, 'findOne' as any).mockResolvedValue(mockProductBase);
+      jest.spyOn(service.productOffer, 'count').mockResolvedValue(0);
+      jest
+        .spyOn(service.productBase, 'delete')
+        .mockResolvedValue(mockProductBase);
+      const res = await service.remove(mockProductBase.id);
+      expect(res).toEqual({
+        message: 'ProductBase deleted successfully',
+        id: mockProductBase.id,
+      });
+    });
 
-//     it('should throw RpcException when product base not found', async () => {
-//       const id = 'nonexistent-id';
-//       jest.spyOn(service.productBase, 'findUnique').mockResolvedValue(null);
-
-//       try {
-//         await service.findOne(id);
-//         fail('Should have thrown RpcException');
-//       } catch (error) {
-//         expect(error).toBeInstanceOf(RpcException);
-//         expect(error.message).toContain('not found');
-//       }
-//     });
-//   });
-
-//   describe('update', () => {
-//     const updateDto = { name: 'Updated Tomato' };
-
-//     it('should successfully update a product base', async () => {
-//       const updatedProduct = { ...mockProductBase, ...updateDto };
-//       jest.spyOn(service, 'findOne').mockResolvedValue(mockProductBase as any);
-//       const updateSpy = jest
-//         .spyOn(service.productBase, 'update')
-//         .mockResolvedValue(updatedProduct as any);
-
-//       const result = await service.update(mockProductBase.id, updateDto);
-
-//       expect(result).toEqual(updatedProduct);
-//       expect(updateSpy).toHaveBeenCalledWith({
-//         where: { id: mockProductBase.id },
-//         data: updateDto,
-//       });
-//     });
-
-//     it('should throw RpcException when no fields provided', async () => {
-//       try {
-//         await service.update(mockProductBase.id, {});
-//         fail('Should have thrown RpcException');
-//       } catch (error) {
-//         expect(error).toBeInstanceOf(RpcException);
-//         expect(error.message).toContain('At least one field');
-//       }
-//     });
-
-//     it('should throw RpcException when product base not found', async () => {
-//       jest.spyOn(service, 'findOne').mockRejectedValue(
-//         new RpcException({
-//           status: HttpStatus.NOT_FOUND,
-//           message: 'Product base not found',
-//         }),
-//       );
-
-//       try {
-//         await service.update('nonexistent-id', updateDto);
-//         fail('Should have thrown RpcException');
-//       } catch (error) {
-//         expect(error).toBeInstanceOf(RpcException);
-//       }
-//     });
-//   });
-
-//   describe('remove', () => {
-//     it('should successfully delete a product base', async () => {
-//       jest.spyOn(service, 'findOne').mockResolvedValue(mockProductBase as any);
-//       const countSpy = jest
-//         .spyOn(service.productOffer, 'count')
-//         .mockResolvedValue(0);
-//       const deleteSpy = jest
-//         .spyOn(service.productBase, 'delete')
-//         .mockResolvedValue(mockProductBase as any);
-
-//       const result = await service.remove(mockProductBase.id);
-
-//       expect(result).toEqual({
-//         message: 'ProductBase deleted successfully',
-//         id: mockProductBase.id,
-//       });
-//       expect(countSpy).toHaveBeenCalledWith({
-//         where: { productBaseId: mockProductBase.id },
-//       });
-//       expect(deleteSpy).toHaveBeenCalledWith({
-//         where: { id: mockProductBase.id },
-//       });
-//     });
-
-//     it('should throw RpcException when product base not found', async () => {
-//       jest.spyOn(service, 'findOne').mockRejectedValue(
-//         new RpcException({
-//           status: HttpStatus.NOT_FOUND,
-//           message: `ProductBase with id 'nonexistent-id' not found`,
-//         }),
-//       );
-
-//       try {
-//         await service.remove('nonexistent-id');
-//         fail('Should have thrown RpcException');
-//       } catch (error) {
-//         expect(error).toBeInstanceOf(RpcException);
-//         expect(error.message).toContain('not found');
-//       }
-//     });
-
-//     it('should throw RpcException when product base has associated offers', async () => {
-//       jest.spyOn(service, 'findOne').mockResolvedValue(mockProductBase as any);
-//       jest.spyOn(service.productOffer, 'count').mockResolvedValue(5);
-
-//       try {
-//         await service.remove(mockProductBase.id);
-//         fail('Should have thrown RpcException');
-//       } catch (error) {
-//         expect(error).toBeInstanceOf(RpcException);
-//         expect(error.message).toContain('associated offers');
-//       }
-//     });
-//   });
-// });
+    it('should fail when offers exist', async () => {
+      jest.spyOn(service, 'findOne' as any).mockResolvedValue(mockProductBase);
+      jest.spyOn(service.productOffer, 'count').mockResolvedValue(5);
+      await expect(service.remove(mockProductBase.id)).rejects.toBeInstanceOf(
+        RpcException,
+      );
+    });
+  });
+});

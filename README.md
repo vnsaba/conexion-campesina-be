@@ -104,32 +104,5 @@ Después de generar, abre: http://localhost:8080
 
 ## Documentacion Swagger 
 
-- Un ejemplo de como realizarla se encuentra en el controller de `Unit`
-``` typescript
-  @ApiOperation({ summary: 'Create a new unit' })
-  @ApiBody({ type: CreateUnitDto })
-  @ApiResponse({ status: 201, description: 'Unit created successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid data or duplicate name' })
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
-  @UseGuards(AuthGuard, UserRoleGuard)
-  @Post('')
-  createUnit(@Body() createUnitDto: CreateUnitDto) {
-    return this.natsClient.send('product.createUnit', createUnitDto).pipe(
-      catchError((error) => {
-        throw new RpcException(error);
-      }),
-    );
-  }
-```
-
-
-- Para añadir el candado de la authorizathion solo se pone esto en los controllers en `auth-client`
-
-``` typescript
-@ApiBearerAuth('bearer')
-@Controller('product/base')
-export class ProductBaseController {}
-```
-
 1. Correr `npm run start:dev`
 2. Visitar la pagina http://localhost:3000/doc

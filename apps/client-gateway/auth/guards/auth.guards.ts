@@ -30,7 +30,7 @@ export class AuthGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException();
     }
-    return true;
+    return true; //si se lanza una excepcion no llega a esta linea y si retorna true es que puede seguri
   }
 
   private extractTokenFromHeader(request: Request): string | undefined {

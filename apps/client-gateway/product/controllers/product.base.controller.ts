@@ -29,12 +29,8 @@ export class ProductBaseController {
   ) {}
 
   /**
-   * Creates a new Product Base.
-   * Sends message pattern: 'product.base.create'
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @param createProductBaseDto Product Base data to create
-   * @returns Observable with the created Product Base
+   * Creates a new product base.
+   * Sends product data to the NATS product service for base product creation.
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
@@ -50,11 +46,8 @@ export class ProductBaseController {
   }
 
   /**
-   * Retrieves all Product Bases.
-   * Sends message pattern: 'product.base.findAll'
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @returns Observable with the list of Product Bases
+   * Retrieves all product bases.
+   * Sends request to the NATS product service and returns the list of base products.
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
@@ -68,12 +61,21 @@ export class ProductBaseController {
   }
 
   /**
-   * Retrieves a Product Base by its ID.
-   * Sends message pattern: 'product.base.findOne'
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @param id Product Base identifier (string/ObjectId)
-   * @returns Observable with the found Product Base
+   * Retrieves the list of categories.
+   * Sends request to the NATS product service and returns the categories array.
+   */
+  @Get('categories')
+  getCategories() {
+    return this.natsClient.send('product.base.getCategories', {}).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
+  }
+
+  /**
+   * Retrieves a product base by ID.
+   * Sends request to the NATS product service and returns the product base.
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
@@ -87,14 +89,8 @@ export class ProductBaseController {
   }
 
   /**
-   * Updates a Product Base by its ID.
-   * Sends message pattern: 'product.base.update'
-   * Payload shape: { id, updateProductBase: UpdateProductBaseDto }
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @param id Product Base identifier to update
-   * @param updateProductBaseDto Fields to update
-   * @returns Observable with the updated Product Base
+   * Updates a product base.
+   * Sends updated data to the NATS product service and returns the updated product base.
    */
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
@@ -116,12 +112,8 @@ export class ProductBaseController {
   }
 
   /**
-   * Removes a Product Base by its ID.
-   * Sends message pattern: 'product.base.remove'
-   * Authorization: ADMIN or PRODUCER
-   *
-   * @param id Product Base identifier to remove
-   * @returns Observable with deletion confirmation
+   * Deletes a product base.
+   * Sends deletion request to the NATS product service.
    */
   @RoleProtected(ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
