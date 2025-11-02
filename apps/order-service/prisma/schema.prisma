@@ -5,7 +5,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mongodb"
+  provider = "postgresql"
   url      = env("ORDER_MS_DATABASE_URL")
 }
 
@@ -17,8 +17,8 @@ enum OrderStatus {
 }
 
 model Order {
-  id          String        @id @default(auto()) @map("_id") @db.ObjectId
-  clientId    String        @db.ObjectId
+  id          String        @id @default(uuid())
+  clientId    String
   status      OrderStatus   @default(PENDING)
   totalAmount Float
   totalItems  Int           @default(0)
@@ -34,9 +34,9 @@ model Order {
 }
 
 model OrderDetails {
-  id             String @id @default(auto()) @map("_id") @db.ObjectId
-  orderId        String @db.ObjectId
-  productOfferId String @db.ObjectId
+  id             String @id @default(uuid())
+  orderId        String
+  productOfferId String
   quantity       Int
   price          Float
   subtotal       Float
