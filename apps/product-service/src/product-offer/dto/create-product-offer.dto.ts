@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsEnum,
   IsMongoId,
   IsNumber,
   IsOptional,
@@ -11,19 +12,20 @@ import {
   MinLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { Unit } from '../../../generated/prisma';
 
 export class CreateProductOfferDto {
   /**
-   * Product base identifier.
-   * References an existing product base.
+   * Identificador del producto base.
+   * Referencia a un producto base existente.
    * @example "507f1f77bcf86cd799439011"
    */
   @IsMongoId()
   productBaseId: string;
 
   /**
-   * Product offer name.
-   * Must be between 2 and 100 characters.
+   * Nombre de la oferta del producto.
+   * Debe tener entre 2 y 100 caracteres.
    * @example "Tomate Orgánico Chonto"
    */
   @Transform(({ value }) => value?.trim())
@@ -33,8 +35,8 @@ export class CreateProductOfferDto {
   name: string;
 
   /**
-   * Product offer description.
-   * Must be between 10 and 300 characters.
+   * Descripción de la oferta del producto.
+   * Debe tener entre 10 y 300 caracteres.
    * @example "Tomates orgánicos cultivados sin pesticidas, cosecha reciente"
    */
   @Transform(({ value }) => value?.trim())
@@ -44,8 +46,8 @@ export class CreateProductOfferDto {
   description: string;
 
   /**
-   * Product price in Colombian pesos.
-   * Must be between 1 and 100,000,000.
+   * Precio del producto en pesos colombianos.
+   * Debe estar entre 1 y 100,000,000.
    * @example 5000
    */
   @IsNumber()
@@ -54,24 +56,24 @@ export class CreateProductOfferDto {
   price: number;
 
   /**
-   * Product image URL.
-   * Must be a valid URL.
+   * URL de la imagen del producto.
+   * Debe ser una URL válida.
    * @example "https://example.com/images/tomate-organico.jpg"
    */
-  @IsUrl({})
+  @IsUrl()
   imageUrl: string;
 
   /**
-   * Unit of measure identifier.
-   * References an existing unit.
-   * @example "507f1f77bcf86cd799439013"
+   * Unidad de medida del producto.
+   * Debe ser una unidad válida del enum Unit.
+   * @example "KILOGRAMO"
    */
-  @IsMongoId()
-  unitId: string;
+  @IsEnum(Unit)
+  unit: Unit;
 
   /**
-   * Available quantity.
-   * Must be between 1 and 100.
+   * Cantidad disponible.
+   * Debe estar entre 1 y 100.
    * @example 50
    */
   @IsNumber()
@@ -80,8 +82,8 @@ export class CreateProductOfferDto {
   quantity: number;
 
   /**
-   * Product availability status.
-   * Indicates if the product is available for sale.
+   * Estado de disponibilidad del producto.
+   * Indica si está disponible para la venta.
    * @example true
    */
   @IsBoolean()

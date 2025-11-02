@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -33,37 +27,15 @@ model ProductOffer {
   price         Float
   isAvailable   Boolean     @default(true)
   imageUrl      String
-
-  unitId        String      @db.ObjectId
-  unit          Unit        @relation(fields: [unitId], references: [id])
-
+  unit          Unit
   quantity      Float
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
   @@index([productBaseId])
   @@index([producerId])
-  @@index([unitId])
   @@map("product_offers")
 }
-
-model Unit {
-  id              String     @id @default(auto()) @map("_id") @db.ObjectId
-  name            String
-  symbol          String
-  type            MeasureType
-  description     String?
-  equivalentValue Float?
-  baseUnit        String?
-  
-  offers          ProductOffer[]
-
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-
-  @@map("units")
-}
-
 
 enum Category {
   FRUTAS
@@ -93,11 +65,26 @@ enum Category {
   PROCESADOS
 }
 
-enum MeasureType {
-  WEIGHT    // (PESO) kg, g, lb, oz
-  VOLUME    // (VOLUMEN) l, ml
-  COUNT     // (CANTIDAD) unidad, docena
-  LENGTH    // (LONGITUD) m, cm
-  AREA      // (ÁREA) m², ha
-  OTHER     // (OTRO)
+enum Unit {
+  KILOGRAMO   @map("Kg")
+  GRAMO       @map("g")
+  LITRO       @map("L")
+  MILILITRO   @map("mL")
+  TONELADA    @map("t")
+  LIBRA       @map("lb")
+  ARROBA      @map("arroba")
+  CARGA       @map("Carga")
+  BULTO       @map("Bulto")
+  SACO        @map("Saco")
+  CAJA        @map("Caja")
+  CANASTA     @map("Canasta")
+  ATADO       @map("Atado")
+  MANOJO      @map("Manojo")
+  RACIMO      @map("Racimo")
+  UNIDAD      @map("Unidad")
+  DOCENA      @map("Docena")
+  MEDIA_DOCENA @map("Media_docena")
+  PAR         @map("Par")
+  CUARTILLA   @map("Cuartilla")
+  BOTELLA     @map("Botella")
 }

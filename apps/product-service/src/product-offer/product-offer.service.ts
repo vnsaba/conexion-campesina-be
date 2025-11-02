@@ -12,7 +12,7 @@ import { CreateProductOfferDto } from './dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from './dto/update-product-offer.dto';
 
 type ProductOfferWithRelations = Prisma.ProductOfferGetPayload<{
-  include: { productBase: true; unit: true };
+  include: { productBase: true };
 }>;
 
 @Injectable()
@@ -32,7 +32,7 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
    * @param createProductOfferDto - Data Transfer Object for creating a product offer
    * @param producerId - The identifier of the producer creating the offer
    * @returns The created product offer with its associated ProductBase and Unit
-   * @throws {RpcException} If the referenced ProductBase or Unit does not exist
+   * @throws {RpcException} If the referenced ProductBase does not exist
    * @throws {RpcException} If a product offer with the same name already exists for the producer and product base
    * @throws {RpcException} If there's a database error during creation
    */
@@ -40,7 +40,7 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
     createProductOfferDto: CreateProductOfferDto,
     producerId: string,
   ): Promise<ProductOfferWithRelations> {
-    const { productBaseId, name, unitId } = createProductOfferDto;
+    const { productBaseId, name } = createProductOfferDto;
 
     try {
       const productBase = await this.productBase.findUnique({
@@ -51,17 +51,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         throw new RpcException({
           status: HttpStatus.NOT_FOUND,
           message: `ProductBase with id '${productBaseId}' not found`,
-        });
-      }
-
-      const unit = await this.unit.findUnique({
-        where: { id: unitId },
-      });
-
-      if (!unit) {
-        throw new RpcException({
-          status: HttpStatus.NOT_FOUND,
-          message: `Unit with id '${unitId}' not found`,
         });
       }
 
@@ -83,7 +72,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         },
         include: {
           productBase: true,
-          unit: true,
         },
       });
 
@@ -110,7 +98,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       const productOffers = await this.productOffer.findMany({
         include: {
           productBase: true,
-          unit: true,
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -128,6 +115,7 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       });
     }
   }
+
   /**
    * Returns a product offer by id including its ProductBase and Unit
    * @param id - The MongoDB ObjectId of the product offer
@@ -141,7 +129,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         where: { id },
         include: {
           productBase: true,
-          unit: true,
         },
       });
 
@@ -176,7 +163,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
    * @returns The updated product offer with its associated ProductBase and Unit
    * @throws {RpcException} If no fields are provided to update
    * @throws {RpcException} If ProductBase doesn't exist (when updating productBaseId)
-   * @throws {RpcException} If Unit doesn't exist (when updating unitId)
    * @throws {RpcException} If the product offer is not found
    * @throws {RpcException} If there's a database error during update
    */
@@ -207,25 +193,11 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         }
       }
 
-      if (updateProductOfferDto.unitId) {
-        const unit = await this.unit.findUnique({
-          where: { id: updateProductOfferDto.unitId },
-        });
-
-        if (!unit) {
-          throw new RpcException({
-            status: HttpStatus.NOT_FOUND,
-            message: `Unit with id '${updateProductOfferDto.unitId}' not found`,
-          });
-        }
-      }
-
       const updatedProductOffer = await this.productOffer.update({
         where: { id },
         data: updateProductOfferDto,
         include: {
           productBase: true,
-          unit: true,
         },
       });
 
@@ -288,7 +260,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         where: { producerId },
         include: {
           productBase: true,
-          unit: true,
         },
         orderBy: { createdAt: 'desc' },
       });
