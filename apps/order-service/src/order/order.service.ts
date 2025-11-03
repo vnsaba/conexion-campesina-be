@@ -24,13 +24,23 @@ export class OrderService extends PrismaClient implements OnModuleInit {
     super();
   }
 
+  /**
+   * Initializes the module by connecting to the database
+   * @returns Promise that resolves when the database connection is established
+   */
   async onModuleInit(): Promise<void> {
     await this.$connect();
     this.logger.log('Database connected');
   }
 
   /**
-   * Crea una nueva orden con el total calculado automaticamente
+   * Creates a new order with automatically calculated totals
+   *
+   * @param clientId - The ID of the client creating the order
+   * @param createOrderDto - Data transfer object containing order details, address, and status
+   * @returns Promise resolving to the created order with its details
+   * @throws {RpcException} BAD_REQUEST if product offers don't exist
+   * @throws {RpcException} INTERNAL_SERVER_ERROR if order creation fails
    */
   async create(clientId: string, createOrderDto: CreateOrderDto) {
     const { status, address, orderDetails } = createOrderDto;
@@ -105,7 +115,11 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Obtiene todas las ordenes
+   * Retrieves all orders with pagination and optional status filtering
+   *
+   * @param orderPaginationDto - Pagination parameters including page, limit, and optional status filter
+   * @returns Promise resolving to paginated orders with metadata (total, page, lastPage)
+   * @throws {RpcException} INTERNAL_SERVER_ERROR if fetching orders fails
    */
   async findAll(orderPaginationDto: OrderPaginationDto) {
     try {
@@ -146,7 +160,12 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Obtiene una orden por su ID
+   * Retrieves a single order by its ID
+   *
+   * @param id - The unique identifier of the order
+   * @returns Promise resolving to the order with its details
+   * @throws {RpcException} NOT_FOUND if order doesn't exist
+   * @throws {RpcException} INTERNAL_SERVER_ERROR if fetching order fails
    */
   async findOne(id: string) {
     try {
@@ -179,7 +198,13 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Actualiza el status de una orden
+   * Updates the status of an existing order
+   *
+   * @param id - The unique identifier of the order to update
+   * @param updateOrderDto - Data transfer object containing the new status
+   * @returns Promise resolving to the updated order with its details
+   * @throws {RpcException} NOT_FOUND if order doesn't exist
+   * @throws {RpcException} INTERNAL_SERVER_ERROR if updating order fails
    */
   async update(id: string, updateOrderDto: UpdateOrderDto) {
     try {
@@ -218,7 +243,12 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Elimina una orden
+   * Deletes an order by its ID
+   *
+   * @param id - The unique identifier of the order to delete
+   * @returns Promise resolving to a confirmation message and the deleted order ID
+   * @throws {RpcException} NOT_FOUND if order doesn't exist
+   * @throws {RpcException} INTERNAL_SERVER_ERROR if deleting order fails
    */
   async remove(id: string) {
     try {
@@ -249,7 +279,11 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Obtiene las ordenes por el ID del cliente
+   * Retrieves all orders for a specific client
+   *
+   * @param clientId - The unique identifier of the client
+   * @returns Promise resolving to an array of orders with their details, sorted by date descending
+   * @throws {RpcException} INTERNAL_SERVER_ERROR if fetching client orders fails
    */
   async findByClientId(clientId: string) {
     try {
@@ -273,7 +307,12 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   /**
-   * Obtiene todos los detalles de una orden
+   * Retrieves all order details (items) for a specific order
+   *
+   * @param orderId - The unique identifier of the order
+   * @returns Promise resolving to an array of order details sorted by creation date ascending
+   * @throws {RpcException} NOT_FOUND if order doesn't exist
+   * @throws {RpcException} INTERNAL_SERVER_ERROR if fetching order details fails
    */
   async getOrderDetails(orderId: string) {
     try {
