@@ -57,7 +57,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       if (!validation.valid) {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
-          message: `Los siguientes productos no existen: ${validation.missingIds.join(', ')}`,
+          message: `The following products do not exist: ${validation.missingIds.join(', ')}`,
         });
       }
 
@@ -99,17 +99,17 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         },
       });
 
-      this.logger.log(`Orden creada correctamente: ${order.id}`);
+      this.logger.log(`Order created successfully: ${order.id}`);
       return order;
     } catch (error) {
       if (error instanceof RpcException) {
         throw error;
       }
 
-      this.logger.error('Error al crear la orden', error.stack);
+      this.logger.error('Failed to create order', error.stack);
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: 'Error al crear la orden',
+        message: 'Failed to create order',
       });
     }
   }
@@ -151,10 +151,10 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         },
       };
     } catch (error) {
-      this.logger.error('Error al obtener todas las ordenes', error.stack);
+      this.logger.error('Failed to fetch all orders', error.stack);
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: 'Error al obtener todas las ordenes',
+        message: 'Failed to fetch all orders',
       });
     }
   }
@@ -177,7 +177,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       });
 
       if (!order) {
-        throw new NotFoundException(`Orden con id '${id}' no encontrada`);
+        throw new NotFoundException(`Order with id '${id}' not found`);
       }
 
       return order;
@@ -213,7 +213,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       if (!existingOrder) {
         throw new RpcException({
           status: HttpStatus.NOT_FOUND,
-          message: 'Orden no encontrada',
+          message: 'Order not found',
         });
       }
 
@@ -227,17 +227,17 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         },
       });
 
-      this.logger.log(`Orden actualizada correctamente: ${id}`);
+      this.logger.log(`Order updated successfully: ${id}`);
       return updatedOrder;
     } catch (error) {
       if (error instanceof RpcException) {
         throw error;
       }
 
-      this.logger.error(`Error al actualizar la orden ${id}`, error.stack);
+      this.logger.error(`Failed to update order ${id}`, error.stack);
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: 'Error al actualizar la orden',
+        message: 'Failed to update order',
       });
     }
   }
@@ -257,23 +257,23 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       if (!existingOrder) {
         throw new RpcException({
           status: HttpStatus.NOT_FOUND,
-          message: `Orden con id '${id}' no encontrada`,
+          message: `Order with id '${id}' not found`,
         });
       }
 
       await this.order.delete({ where: { id } });
 
-      this.logger.log(`Orden eliminada correctamente: ${id}`);
-      return { message: 'Orden eliminada correctamente', id };
+      this.logger.log(`Order deleted successfully: ${id}`);
+      return { message: 'Order deleted successfully', id };
     } catch (error) {
       if (error instanceof RpcException) {
         throw error;
       }
 
-      this.logger.error(`Error al eliminar la orden ${id}`, error.stack);
+      this.logger.error(`Failed to delete order ${id}`, error.stack);
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: 'Error al eliminar la orden',
+        message: 'Failed to delete order',
       });
     }
   }
@@ -296,12 +296,12 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       });
     } catch (error) {
       this.logger.error(
-        `Error al obtener las ordenes del cliente ${clientId}`,
+        `Failed to fetch orders for client ${clientId}`,
         error.stack,
       );
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: 'Error al obtener las ordenes del cliente',
+        message: 'Failed to fetch client orders',
       });
     }
   }
@@ -320,7 +320,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       if (!existingOrder) {
         throw new RpcException({
           status: HttpStatus.NOT_FOUND,
-          message: 'Orden no encontrada',
+          message: 'Order not found',
         });
       }
 
@@ -336,12 +336,12 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       }
 
       this.logger.error(
-        `Error al obtener los detalles de la orden ${orderId}`,
+        `Failed to fetch order details for order ${orderId}`,
         error.stack,
       );
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: 'Error al obtener los detalles de la orden',
+        message: 'Failed to fetch order details',
       });
     }
   }
