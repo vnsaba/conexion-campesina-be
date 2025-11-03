@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RpcException } from '@nestjs/microservices';
 import { ProductOfferService } from '../src/product-offer/product-offer.service';
-import { Category } from '../generated/prisma';
+import { Category, Unit } from '../generated/prisma';
 import { CreateProductOfferDto } from '../src/product-offer/dto/create-product-offer.dto';
 
 describe('ProductOfferService', () => {
@@ -13,12 +13,6 @@ describe('ProductOfferService', () => {
     category: Category.VERDURAS,
   };
 
-  const mockUnit = {
-    id: '507f1f77bcf86cd799439013',
-    name: 'kg',
-    abbreviation: 'kg',
-  };
-
   const mockProductOffer = {
     id: '507f1f77bcf86cd799439012',
     productBaseId: '507f1f77bcf86cd799439011',
@@ -27,13 +21,12 @@ describe('ProductOfferService', () => {
     description: 'Fresh organic tomatoes from local farm',
     price: 5000,
     imageUrl: 'https://example.com/tomato.jpg',
-    unitId: '507f1f77bcf86cd799439013',
+    unit: Unit.KILOGRAMO,
     quantity: 50,
     isAvailable: true,
     createdAt: new Date(),
     updatedAt: new Date(),
     productBase: mockProductBase,
-    unit: mockUnit,
   };
 
   const createDto = {
@@ -43,7 +36,7 @@ describe('ProductOfferService', () => {
     description: 'Fresh organic tomatoes from local farm',
     price: 5000,
     imageUrl: 'https://example.com/tomato.jpg',
-    unitId: '507f1f77bcf86cd799439013',
+    unit: Unit.KILOGRAMO,
     quantity: 50,
     isAvailable: true,
   };
@@ -75,13 +68,6 @@ describe('ProductOfferService', () => {
       writable: false,
     });
 
-    Object.defineProperty(service, 'unit', {
-      value: {
-        findUnique: jest.fn(),
-      },
-      writable: false,
-    });
-
     service.$connect = jest.fn().mockResolvedValue(undefined);
     service.$disconnect = jest.fn().mockResolvedValue(undefined);
   });
@@ -97,7 +83,6 @@ describe('ProductOfferService', () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
       (service.productOffer.create as jest.Mock).mockRejectedValue(
         new Error('Price validation failed'),
@@ -113,7 +98,6 @@ describe('ProductOfferService', () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
       (service.productOffer.create as jest.Mock).mockResolvedValue({
         ...mockProductOffer,
@@ -132,7 +116,6 @@ describe('ProductOfferService', () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
       (service.productOffer.create as jest.Mock).mockResolvedValue({
         ...mockProductOffer,
@@ -153,7 +136,6 @@ describe('ProductOfferService', () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
       (service.productOffer.create as jest.Mock).mockRejectedValue(
         new Error('Quantity validation failed'),
@@ -169,7 +151,6 @@ describe('ProductOfferService', () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
       (service.productOffer.create as jest.Mock).mockResolvedValue({
         ...mockProductOffer,
@@ -188,7 +169,6 @@ describe('ProductOfferService', () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
       (service.productOffer.create as jest.Mock).mockResolvedValue({
         ...mockProductOffer,
@@ -208,7 +188,6 @@ describe('ProductOfferService', () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
       (service.productOffer.create as jest.Mock).mockResolvedValue(
         mockProductOffer,
@@ -244,47 +223,45 @@ describe('ProductOfferService', () => {
     });
   });
 
-  describe('create - Unit relationship', () => {
-    it('should succeed when Unit exists', async () => {
+  describe('create - Unit enum validation', () => {
+    it('should succeed with valid Unit enum value (KILOGRAMO)', async () => {
+      const dto = { ...createDto, unit: Unit.KILOGRAMO };
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
-      (service.productOffer.create as jest.Mock).mockResolvedValue(
-        mockProductOffer,
-      );
+      (service.productOffer.create as jest.Mock).mockResolvedValue({
+        ...mockProductOffer,
+        unit: Unit.KILOGRAMO,
+      });
 
       const result = await service.create(
-        createDto as CreateProductOfferDto,
-        createDto.producerId,
+        dto as CreateProductOfferDto,
+        dto.producerId,
       );
-      expect(result.unit).toBeDefined();
-      expect(result.unitId).toBe(mockUnit.id);
+      expect(result.unit).toBe(Unit.KILOGRAMO);
     });
 
-    it('should fail when Unit does not exist', async () => {
-      (service.productBase.findUnique as jest.Mock).mockResolvedValue(
-        mockProductBase,
-      );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(null);
+    it('should succeed with different valid Unit enum values', async () => {
+      const units = [Unit.KILOGRAMO, Unit.GRAMO, Unit.LIBRA, Unit.UNIDAD];
+      
+      for (const unit of units) {
+        const dto = { ...createDto, unit };
+        (service.productBase.findUnique as jest.Mock).mockResolvedValue(
+          mockProductBase,
+        );
+        (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
+        (service.productOffer.create as jest.Mock).mockResolvedValue({
+          ...mockProductOffer,
+          unit,
+        });
 
-      await expect(
-        service.create(
-          createDto as CreateProductOfferDto,
-          createDto.producerId,
-        ),
-      ).rejects.toBeInstanceOf(RpcException);
-      await expect(
-        service.create(
-          createDto as CreateProductOfferDto,
-          createDto.producerId,
-        ),
-      ).rejects.toMatchObject({
-        error: expect.objectContaining({
-          message: expect.stringContaining('Unit'),
-        }),
-      });
+        const result = await service.create(
+          dto as CreateProductOfferDto,
+          dto.producerId,
+        );
+        expect(result.unit).toBe(unit);
+      }
     });
   });
 
@@ -304,7 +281,6 @@ describe('ProductOfferService', () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(null);
       (service.productOffer.create as jest.Mock)
         .mockResolvedValueOnce({ ...mockProductOffer, ...offer1 })
@@ -327,7 +303,6 @@ describe('ProductOfferService', () => {
       (service.productBase.findUnique as jest.Mock).mockResolvedValue(
         mockProductBase,
       );
-      (service.unit.findUnique as jest.Mock).mockResolvedValue(mockUnit);
       (service.productOffer.findFirst as jest.Mock).mockResolvedValue(
         mockProductOffer,
       );
@@ -410,6 +385,22 @@ describe('ProductOfferService', () => {
       expect(result.price).toBe(updateDto.price);
     });
 
+    it('should update unit successfully', async () => {
+      const updateDto = {
+        unit: Unit.GRAMO,
+      };
+      (service.productOffer.findUnique as jest.Mock).mockResolvedValue(
+        mockProductOffer,
+      );
+      (service.productOffer.update as jest.Mock).mockResolvedValue({
+        ...mockProductOffer,
+        ...updateDto,
+      });
+
+      const result = await service.update(mockProductOffer.id, updateDto);
+      expect(result.unit).toBe(Unit.GRAMO);
+    });
+
     it('should fail when no fields provided', async () => {
       await expect(
         service.update(mockProductOffer.id, {} as any),
@@ -454,7 +445,7 @@ describe('ProductOfferService', () => {
       expect(result).toEqual(mockOffers);
       expect(service.productOffer.findMany).toHaveBeenCalledWith({
         where: { producerId },
-        include: { productBase: true, unit: true },
+        include: { productBase: true },
         orderBy: { createdAt: 'desc' },
       });
     });
