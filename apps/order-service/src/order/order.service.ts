@@ -46,6 +46,29 @@ export class OrderService extends PrismaClient implements OnModuleInit {
     const { status, address, orderDetails } = createOrderDto;
 
     try {
+      if (!orderDetails || orderDetails.length === 0) {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Order must contain at least one product',
+        });
+      }
+
+      for (const detail of orderDetails) {
+        if (detail.quantity <= 0) {
+          throw new RpcException({
+            status: HttpStatus.BAD_REQUEST,
+            message: 'Quantity must be greater than zero',
+          });
+        }
+
+        if (detail.price <= 0) {
+          throw new RpcException({
+            status: HttpStatus.BAD_REQUEST,
+            message: 'Price must be greater than zero',
+          });
+        }
+      }
+
       const productOfferIds = orderDetails.map(
         (detail) => detail.productOfferId,
       );

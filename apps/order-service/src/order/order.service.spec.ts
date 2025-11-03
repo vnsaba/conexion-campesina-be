@@ -250,11 +250,133 @@ describe('OrderService', () => {
         expect.stringContaining('Order created successfully'),
       );
     });
+
+    // ORDER-CP-04
+    it('ORDER-CP-04: should throw BAD_REQUEST when creating order with empty orderDetails', async () => {
+      const clientId = 'client-123';
+      const createOrderDto = {
+        address: 'Calle 123 #45-67',
+        orderDetails: [],
+      };
+
+      await expect(service.create(clientId, createOrderDto)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.create(clientId, createOrderDto);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Order must contain at least one product',
+        });
+      }
+
+      expect(service['order'].create).not.toHaveBeenCalled();
+      expect(mockNatsClient.send).not.toHaveBeenCalled();
+    });
+
+    // ORDER-CP-05
+    it('ORDER-CP-05: should throw BAD_REQUEST when quantity is zero', async () => {
+      const clientId = 'client-123';
+      const createOrderDto = {
+        address: 'Calle 123 #45-67',
+        orderDetails: [
+          {
+            productOfferId: 'prod-1',
+            quantity: 0,
+            price: 10000,
+          },
+        ],
+      };
+
+      await expect(service.create(clientId, createOrderDto)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.create(clientId, createOrderDto);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Quantity must be greater than zero',
+        });
+      }
+
+      expect(service['order'].create).not.toHaveBeenCalled();
+      expect(mockNatsClient.send).not.toHaveBeenCalled();
+    });
+
+    // ORDER-CP-06
+    it('ORDER-CP-06: should throw BAD_REQUEST when quantity is negative', async () => {
+      const clientId = 'client-123';
+      const createOrderDto = {
+        address: 'Calle 123 #45-67',
+        orderDetails: [
+          {
+            productOfferId: 'prod-1',
+            quantity: -5,
+            price: 10000,
+          },
+        ],
+      };
+
+      await expect(service.create(clientId, createOrderDto)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.create(clientId, createOrderDto);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Quantity must be greater than zero',
+        });
+      }
+
+      expect(service['order'].create).not.toHaveBeenCalled();
+      expect(mockNatsClient.send).not.toHaveBeenCalled();
+    });
+
+    // ORDER-CP-07
+    it('ORDER-CP-07: should throw BAD_REQUEST when price is zero or negative', async () => {
+      const clientId = 'client-123';
+      const createOrderDto = {
+        address: 'Calle 123 #45-67',
+        orderDetails: [
+          {
+            productOfferId: 'prod-1',
+            quantity: 5,
+            price: 0,
+          },
+        ],
+      };
+
+      await expect(service.create(clientId, createOrderDto)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.create(clientId, createOrderDto);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Price must be greater than zero',
+        });
+      }
+
+      expect(service['order'].create).not.toHaveBeenCalled();
+      expect(mockNatsClient.send).not.toHaveBeenCalled();
+    });
   });
 
   describe('findAll', () => {
-    // ORDER-CP-04
-    it('ORDER-CP-04: should return orders with default pagination', async () => {
+    // ORDER-CP-08
+    it('ORDER-CP-08: should return orders with default pagination', async () => {
       const mockOrders = Array.from({ length: 10 }, (_, i) => ({
         ...mockOrder,
         id: `order-${i}`,
@@ -289,8 +411,8 @@ describe('OrderService', () => {
       });
     });
 
-    // ORDER-CP-05
-    it('ORDER-CP-05: should return orders with custom pagination', async () => {
+    // ORDER-CP-09
+    it('ORDER-CP-09: should return orders with custom pagination', async () => {
       const mockOrders = Array.from({ length: 5 }, (_, i) => ({
         ...mockOrder,
         id: `order-${i + 5}`,
@@ -320,8 +442,8 @@ describe('OrderService', () => {
       });
     });
 
-    // ORDER-CP-06
-    it('ORDER-CP-06: should return orders filtered by status', async () => {
+    // ORDER-CP-10
+    it('ORDER-CP-10: should return orders filtered by status', async () => {
       const mockPendingOrders = Array.from({ length: 4 }, (_, i) => ({
         ...mockOrder,
         id: `order-pending-${i}`,
@@ -358,8 +480,8 @@ describe('OrderService', () => {
       ).toBe(true);
     });
 
-    // ORDER-CP-07
-    it('ORDER-CP-07: should throw INTERNAL_SERVER_ERROR on database failure', async () => {
+    // ORDER-CP-11
+    it('ORDER-CP-11: should throw INTERNAL_SERVER_ERROR on database failure', async () => {
       const dbError = new Error('Database connection failed');
       (service['order'].count as jest.Mock).mockRejectedValue(dbError);
 
@@ -383,8 +505,8 @@ describe('OrderService', () => {
   });
 
   describe('findOne', () => {
-    // ORDER-CP-08
-    it('ORDER-CP-08: should return order by ID when it exists', async () => {
+    // ORDER-CP-12
+    it('ORDER-CP-12: should return order by ID when it exists', async () => {
       (service['order'].findUnique as jest.Mock).mockResolvedValue(mockOrder);
 
       const result = await service.findOne('order-id-123');
@@ -400,8 +522,8 @@ describe('OrderService', () => {
       expect(result.orderDetails).toBeDefined();
     });
 
-    // ORDER-CP-09
-    it('ORDER-CP-09: should throw NOT_FOUND when order does not exist', async () => {
+    // ORDER-CP-13
+    it('ORDER-CP-13: should throw NOT_FOUND when order does not exist', async () => {
       (service['order'].findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(service.findOne('invalid-id')).rejects.toThrow(RpcException);
@@ -419,8 +541,8 @@ describe('OrderService', () => {
   });
 
   describe('update', () => {
-    // ORDER-CP-10
-    it('ORDER-CP-10: should update order status successfully', async () => {
+    // ORDER-CP-14
+    it('ORDER-CP-14: should update order status successfully', async () => {
       const updatedOrder = {
         ...mockOrder,
         status: OrderStatus.DELIVERED,
@@ -449,8 +571,8 @@ describe('OrderService', () => {
       );
     });
 
-    // ORDER-CP-11
-    it('ORDER-CP-11: should throw NOT_FOUND when updating non-existent order', async () => {
+    // ORDER-CP-15
+    it('ORDER-CP-15: should throw NOT_FOUND when updating non-existent order', async () => {
       (service['order'].findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(
@@ -475,8 +597,8 @@ describe('OrderService', () => {
   });
 
   describe('remove', () => {
-    // ORDER-CP-12
-    it('ORDER-CP-12: should delete order and its details successfully', async () => {
+    // ORDER-CP-16
+    it('ORDER-CP-16: should delete order and its details successfully', async () => {
       (service['order'].findUnique as jest.Mock).mockResolvedValue(mockOrder);
       (service['order'].delete as jest.Mock).mockResolvedValue(mockOrder);
 
@@ -494,8 +616,8 @@ describe('OrderService', () => {
       );
     });
 
-    // ORDER-CP-13
-    it('ORDER-CP-13: should throw NOT_FOUND when deleting non-existent order', async () => {
+    // ORDER-CP-17
+    it('ORDER-CP-17: should throw NOT_FOUND when deleting non-existent order', async () => {
       (service['order'].findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(service.remove('invalid-id')).rejects.toThrow(RpcException);
@@ -518,8 +640,8 @@ describe('OrderService', () => {
   });
 
   describe('findByClientId', () => {
-    // ORDER-CP-14
-    it('ORDER-CP-14: should return all orders for a specific client', async () => {
+    // ORDER-CP-18
+    it('ORDER-CP-18: should return all orders for a specific client', async () => {
       const mockClientOrders = Array.from({ length: 3 }, (_, i) => ({
         ...mockOrder,
         id: `order-${i}`,
@@ -547,8 +669,8 @@ describe('OrderService', () => {
       expect(result[0].orderDetails).toBeDefined();
     });
 
-    // ORDER-CP-15
-    it('ORDER-CP-15: should return empty array when client has no orders', async () => {
+    // ORDER-CP-19
+    it('ORDER-CP-19: should return empty array when client has no orders', async () => {
       (service['order'].findMany as jest.Mock).mockResolvedValue([]);
 
       const result = await service.findByClientId('client-sin-ordenes');
@@ -567,8 +689,8 @@ describe('OrderService', () => {
   });
 
   describe('getOrderDetails', () => {
-    // ORDER-CP-16
-    it('ORDER-CP-16: should return order details for existing order', async () => {
+    // ORDER-CP-20
+    it('ORDER-CP-20: should return order details for existing order', async () => {
       const mockOrderDetails = [
         {
           id: 'detail-1',
@@ -610,8 +732,8 @@ describe('OrderService', () => {
       expect(result[1].subtotal).toBe(15000);
     });
 
-    // ORDER-CP-17
-    it('ORDER-CP-17: should throw NOT_FOUND when getting details of non-existent order', async () => {
+    // ORDER-CP-21
+    it('ORDER-CP-21: should throw NOT_FOUND when getting details of non-existent order', async () => {
       (service['order'].findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(service.getOrderDetails('invalid-id')).rejects.toThrow(
