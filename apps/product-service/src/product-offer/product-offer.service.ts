@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 
-import { Prisma, PrismaClient } from '../../generated/prisma';
+import { Category, Prisma, PrismaClient } from '../../generated/prisma';
 import { CreateProductOfferDto } from './dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from './dto/update-product-offer.dto';
 
@@ -310,6 +310,79 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to validate product offers',
+      });
+    }
+  }
+
+  async findAllProductOffersByName(
+    name: string,
+  ): Promise<ProductOfferWithRelations[]> {
+    try {
+      const productOffers = await this.productOffer.findMany({
+        where: {
+          name: {
+            contains: name,
+            mode: 'insensitive',
+          },
+        },
+        include: {
+          productBase: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return productOffers;
+    } catch (error: unknown) {
+      this.logger.error(
+        `Error retrieving product offers by name '${name}'`,
+        (error as Error).stack,
+      );
+      if (error instanceof RpcException) throw error;
+
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to retrieve product offers by name',
+      });
+    }
+  }
+
+  async findAllProductOffersByCategory(
+    category: string,
+  ): Promise<ProductOfferWithRelations[]> {
+    try {
+      if (!category) {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Category is required',
+        });
+      }
+
+      const validCategories = Object.values(Category) as string[];
+      if (!validCategories.includes(category.toLocaleUpperCase())) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: `Category '${category}' not found`,
+        });
+      }
+      const productOffers = await this.productOffer.findMany({
+        where: {
+          productBase: {
+            is: {
+              category: category.toLocaleUpperCase() as Category,
+            },
+          },
+        },
+        include: { productBase: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return productOffers;
+    } catch (error: unknown) {
+      if (error instanceof RpcException) throw error;
+
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to retrieve product offers by category',
       });
     }
   }

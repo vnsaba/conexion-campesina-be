@@ -9,12 +9,6 @@ import { ProductOfferService } from './product-offer.service';
 export class ProductOfferController {
   constructor(private readonly productOfferService: ProductOfferService) {}
 
-  /**
-   * Creates a new product offer
-   * @param createProductOfferDto - Product offer data
-   * @param producerId - The identifier of the producer creating the offer
-   * @returns The created product offer
-   */
   @MessagePattern('product.offer.create')
   create(
     @Payload()
@@ -59,13 +53,18 @@ export class ProductOfferController {
     return this.productOfferService.findAllProduct(producerId);
   }
 
-  /**
-   * Validates if multiple product offers exist
-   * @param ids - Array of product offer IDs
-   * @returns Object with validation result and missing IDs if any
-   */
   @MessagePattern('product.offer.validateMany')
   validateMany(@Payload() ids: string[]) {
     return this.productOfferService.validateMany(ids);
+  }
+
+  @MessagePattern('product.offer.searchByName')
+  findAllProductOffersByName(@Payload() name: string) {
+    return this.productOfferService.findAllProductOffersByName(name);
+  }
+
+  @MessagePattern('product.offer.searchByCategory')
+  findAllProductOffersByCategory(@Payload() category: string) {
+    return this.productOfferService.findAllProductOffersByCategory(category);
   }
 }
