@@ -10,6 +10,7 @@ import { RpcException } from '@nestjs/microservices';
 import { Category, Prisma, PrismaClient } from '../../generated/prisma';
 import { CreateProductOfferDto } from './dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from './dto/update-product-offer.dto';
+import { CategoryEnum } from './enum/category.enum';
 
 type ProductOfferWithRelations = Prisma.ProductOfferGetPayload<{
   include: { productBase: true };
@@ -101,8 +102,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         },
         orderBy: { createdAt: 'desc' },
       });
-
-      this.logger.log(`Product offers retrieved: ${productOffers.length}`);
       return productOffers;
     } catch (error: unknown) {
       this.logger.error(
@@ -135,7 +134,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       if (!productOffer) {
         throw new NotFoundException(`ProductOffer with id '${id}' not found`);
       }
-
       return productOffer;
     } catch (error: unknown) {
       if (error instanceof NotFoundException) {
@@ -200,8 +198,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
           productBase: true,
         },
       });
-
-      this.logger.log(`ProductOffer updated: ${id}`);
       return updatedProductOffer;
     } catch (error: unknown) {
       if (error instanceof RpcException) throw error;
@@ -346,40 +342,32 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
     }
   }
 
-  async findAllProductOffersByCategory(
-    category: string,
-  ): Promise<ProductOfferWithRelations[]> {
+  async findAllProductOffersByCategory(category: string) {
     try {
       if (!category) {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
-          message: 'Category is required',
+          message: 'Category must be provided',
         });
       }
 
-      const validCategories = Object.values(Category) as string[];
-      if (!validCategories.includes(category.toLocaleUpperCase())) {
+      const cat = category.trim().toLocaleUpperCase();
+
+      if (!CategoryEnum[cat]) {
         throw new RpcException({
           status: HttpStatus.NOT_FOUND,
           message: `Category '${category}' not found`,
         });
       }
-      const productOffers = await this.productOffer.findMany({
-        where: {
-          productBase: {
-            is: {
-              category: category.toLocaleUpperCase() as Category,
-            },
-          },
-        },
+
+      const allProducts = await this.productOffer.findMany({
         include: { productBase: true },
-        orderBy: { createdAt: 'desc' },
+        where: { productBase: { category: cat as Category } },
       });
 
-      return productOffers;
-    } catch (error: unknown) {
+      return allProducts;
+    } catch (error) {
       if (error instanceof RpcException) throw error;
-
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to retrieve product offers by category',
