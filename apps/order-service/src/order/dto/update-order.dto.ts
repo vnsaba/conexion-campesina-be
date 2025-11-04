@@ -4,7 +4,7 @@ import { OrderStatusList } from '../enum/order.enum';
 
 export class UpdateOrderDto {
   @IsEnum(OrderStatus, {
-    message: `El status debe ser uno de los siguientes: ${OrderStatusList.join(', ')}`,
+    message: `Valid status are: ${OrderStatusList.join(', ')}`,
   })
   status: OrderStatus;
 }
