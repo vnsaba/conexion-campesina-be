@@ -4,7 +4,6 @@ import {
   Get,
   Inject,
   Param,
-  Patch,
   Post,
   Delete,
   UseGuards,
@@ -19,7 +18,7 @@ import { ValidRoles } from '../auth/enum/valid-roles.enum';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/guards/interface/current-user.interface';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
-import { UpdateOrderDto } from '../../order-service/src/order/dto/update-order.dto';
+import { CreateOrderDto } from '../../order-service/src/order/dto/create-order.dto';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -34,14 +33,10 @@ export class OrderController {
   @RoleProtected(ValidRoles.CLIENT, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Post()
-  createOrder(@User() user: CurrentUser, @Body() createOrderDto: any) {
-    if (
-      !user.role.includes(ValidRoles.PRODUCER) &&
-      !user.role.includes(ValidRoles.ADMIN)
-    ) {
-      createOrderDto.status = 'PENDING';
-    }
-
+  createOrder(
+    @User() user: CurrentUser,
+    @Body() createOrderDto: CreateOrderDto,
+  ) {
     return this.natsClient
       .send('order.create', {
         clientId: user.id,
@@ -74,22 +69,6 @@ export class OrderController {
         throw new RpcException(error);
       }),
     );
-  }
-
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
-  @UseGuards(AuthGuard, UserRoleGuard)
-  @Patch(':id')
-  updateOrder(@Param('id') id: string, @Body() updateOrderDto: UpdateOrderDto) {
-    return this.natsClient
-      .send('order.update', {
-        id,
-        updateOrder: updateOrderDto,
-      })
-      .pipe(
-        catchError((error) => {
-          throw new RpcException(error);
-        }),
-      );
   }
 
   @RoleProtected(ValidRoles.ADMIN)

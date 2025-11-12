@@ -9,7 +9,6 @@ import {
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaClient } from '../../generated/prisma';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderDto } from './dto/update-order.dto';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { firstValueFrom } from 'rxjs';
 
@@ -35,15 +34,16 @@ export class OrderService extends PrismaClient implements OnModuleInit {
 
   /**
    * Creates a new order with automatically calculated totals
+   * Orders are always created with PENDING status
    *
    * @param clientId - The ID of the client creating the order
-   * @param createOrderDto - Data transfer object containing order details, address, and status
+   * @param createOrderDto - Data transfer object containing order details and address
    * @returns Promise resolving to the created order with its details
    * @throws {RpcException} BAD_REQUEST if product offers don't exist
    * @throws {RpcException} INTERNAL_SERVER_ERROR if order creation fails
    */
   async create(clientId: string, createOrderDto: CreateOrderDto) {
-    const { status, address, orderDetails } = createOrderDto;
+    const { address, orderDetails } = createOrderDto;
 
     try {
       if (!orderDetails || orderDetails.length === 0) {
@@ -109,7 +109,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       const order = await this.order.create({
         data: {
           clientId,
-          status: status || 'PENDING',
+          status: 'PENDING',
           address,
           totalAmount,
           totalItems,
@@ -216,51 +216,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to fetch order',
-      });
-    }
-  }
-
-  /**
-   * Updates the status of an existing order
-   *
-   * @param id - The unique identifier of the order to update
-   * @param updateOrderDto - Data transfer object containing the new status
-   * @returns Promise resolving to the updated order with its details
-   * @throws {RpcException} NOT_FOUND if order doesn't exist
-   * @throws {RpcException} INTERNAL_SERVER_ERROR if updating order fails
-   */
-  async update(id: string, updateOrderDto: UpdateOrderDto) {
-    try {
-      const existingOrder = await this.findOne(id);
-
-      if (!existingOrder) {
-        throw new RpcException({
-          status: HttpStatus.NOT_FOUND,
-          message: 'Order not found',
-        });
-      }
-
-      const updatedOrder = await this.order.update({
-        where: { id },
-        data: {
-          status: updateOrderDto.status,
-        },
-        include: {
-          orderDetails: true,
-        },
-      });
-
-      this.logger.log(`Order updated successfully: ${id}`);
-      return updatedOrder;
-    } catch (error) {
-      if (error instanceof RpcException) {
-        throw error;
-      }
-
-      this.logger.error(`Failed to update order ${id}`, error.stack);
-      throw new RpcException({
-        status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: 'Failed to update order',
       });
     }
   }
