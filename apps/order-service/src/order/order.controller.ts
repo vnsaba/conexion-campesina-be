@@ -57,4 +57,9 @@ export class OrderController {
   getOrderDetails(@Payload() orderId: string) {
     return this.orderService.getOrderDetails(orderId);
   }
+
+  @MessagePattern('order.existsProductOffer')
+  existsProductOffer(@Payload() productOfferId: string) {
+    return this.orderService.existsProductOffer(productOfferId);
+  }
 }
