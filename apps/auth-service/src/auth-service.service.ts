@@ -12,6 +12,7 @@ import * as bcrypt from 'bcryptjs';
 import { LoginUserDto } from './dto/login-user.dto';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
+import { UpdateClientStatus } from './dto/update-client-status';
 
 @Injectable()
 export class AuthServiceService extends PrismaClient implements OnModuleInit {
@@ -195,6 +196,52 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
       }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password, ...restUser } = user;
+
+      return restUser;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
+   * Updates the status of a specific CLIENT or PRODUCER.
+   *
+   * @param clientId - The unique identifier of the client whose status is to be updated.
+   * @param active - Thew new status to set for the client.
+   * @returns The updated user object.
+   * @throws {RpcException} If the user is not found, the role is invalid, or an internal error occurs.
+   */
+  async updateClientStatus(updateClientDto: UpdateClientStatus) {
+    const { clientId, active } = updateClientDto;
+
+    try {
+      const user = await this.user.findUnique({
+        where: { id: clientId },
+      });
+
+      if (!user) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: `User with id '${clientId}' not found`,
+        });
+      }
+
+      const validRoles: ValidRoles[] = [ValidRoles.CLIENT, ValidRoles.PRODUCER];
+
+      if (!validRoles.includes(user.role)) {
+        throw new RpcException({
+          status: HttpStatus.FORBIDDEN,
+          message: `Cannot update status: User '${clientId}' is not a 'CLIENT' or 'PRODUCER'`,
+        });
+      }
+
+      const updatedUser = await this.user.update({
+        where: { id: clientId },
+        data: { isActive: active },
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...restUser } = updatedUser;
 
       return restUser;
     } catch (error) {
