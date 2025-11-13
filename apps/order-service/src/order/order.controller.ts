@@ -40,6 +40,11 @@ export class OrderController {
     return this.orderService.findByClientId(clientId);
   }
 
+  @MessagePattern('order.findByProducerId')
+  findByProducerId(@Payload() producerId: string) {
+    return this.orderService.findByProducerId(producerId);
+  }
+
   @MessagePattern('order.getOrderDetails')
   getOrderDetails(@Payload() orderId: string) {
     return this.orderService.getOrderDetails(orderId);

@@ -93,6 +93,17 @@ export class OrderController {
     );
   }
 
+  @RoleProtected(ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get('producer/me')
+  findOrdersByProducer(@User() user: CurrentUser) {
+    return this.natsClient.send('order.findByProducerId', user.id).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
+  }
+
   @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get(':orderId/details')

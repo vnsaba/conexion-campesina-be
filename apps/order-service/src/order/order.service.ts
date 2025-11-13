@@ -285,6 +285,70 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   /**
+   * Retrieves all orders containing products offered by a specific producer
+   *
+   * @param producerId - The unique identifier of the producer
+   * @returns Promise resolving to an array of orders with their details
+   * @throws {RpcException} INTERNAL_SERVER_ERROR if fetching producer orders fails
+   */
+  async findByProducerId(producerId: string) {
+    try {
+      const productOffers = await firstValueFrom(
+        this.natsClient.send('product.offer.findAllProducer', producerId),
+      );
+
+      if (!productOffers || productOffers.length === 0) {
+        return [];
+      }
+
+      const productOfferIds = productOffers
+        .map((offer: { id: string }) => offer.id)
+        .filter(Boolean);
+
+      if (productOfferIds.length === 0) {
+        return [];
+      }
+
+      const orders = await this.order.findMany({
+        where: {
+          status: 'PAID',
+          orderDetails: {
+            some: {
+              productOfferId: {
+                in: productOfferIds,
+              },
+            },
+          },
+        },
+        include: {
+          orderDetails: true,
+        },
+        orderBy: { orderDate: 'desc' },
+      });
+
+      return orders.map((order) => ({
+        ...order,
+        orderDetails: order.orderDetails.filter((detail) =>
+          productOfferIds.includes(detail.productOfferId),
+        ),
+      }));
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Failed to fetch orders for producer ${producerId}`,
+        (error as Error).stack,
+      );
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to fetch producer orders',
+      });
+    }
+  }
+
+  /**
    * Retrieves all order details (items) for a specific order
    *
    * @param orderId - The unique identifier of the order
