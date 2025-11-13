@@ -3,6 +3,7 @@ import { AuthServiceService } from './auth-service.service';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
+import { UpdateClientStatus } from './dto/update-client-status';
 
 @Controller()
 export class AuthServiceController {
@@ -26,5 +27,12 @@ export class AuthServiceController {
   @MessagePattern('auth.get.user')
   getUser(@Payload() userId: string) {
     return this.authServiceService.getByUser(userId);
+  }
+
+  @MessagePattern('auth.update.client.status')
+  updateClientStatus(@Payload() updateClientStatusDto: UpdateClientStatus) {
+    const { clientId, active } = updateClientStatusDto;
+
+    return this.authServiceService.updateClientStatus({ clientId, active });
   }
 }
