@@ -323,4 +323,29 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       });
     }
   }
+
+  async existsProductOffer(productOfferId: string): Promise<boolean> {
+    try {
+      const orderDetail = await this.orderDetails.findFirst({
+        where: { productOfferId },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      return !!orderDetail; // true si existe, false si no
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Error al verificar si el producto '${productOfferId}' existe en alguna orden`,
+        (error as Error).stack,
+      );
+
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Error al verificar los detalles de la orden',
+      });
+    }
+  }
 }

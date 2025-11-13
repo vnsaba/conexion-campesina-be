@@ -176,7 +176,8 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      await this.findOne(id);
+      const productNow = await this.findOne(id);
+      const { producerId } = productNow;
 
       if (updateProductOfferDto.productBaseId) {
         const productBase = await this.productBase.findUnique({
@@ -187,6 +188,25 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
           throw new RpcException({
             status: HttpStatus.NOT_FOUND,
             message: `ProductBase with id '${updateProductOfferDto.productBaseId}' not found`,
+          });
+        }
+      }
+
+      if (updateProductOfferDto.productBaseId && updateProductOfferDto.name) {
+        const { productBaseId, name } = updateProductOfferDto;
+        const existingProductOffer = await this.productOffer.findMany({
+          where: {
+            productBaseId,
+            producerId,
+            name,
+            NOT: { id },
+          },
+        });
+
+        if (existingProductOffer.length > 0) {
+          throw new RpcException({
+            status: HttpStatus.CONFLICT,
+            message: `Product offer '${name}' already exists for this producer and product base`,
           });
         }
       }
