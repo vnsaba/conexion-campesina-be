@@ -15,6 +15,7 @@ import { AuthGuard } from './guards/auth.guards';
 import { Token, User } from './guards/decorators';
 import { CurrentUser } from './guards/interface/current-user.interface';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { UpdateClientStatus } from './dto/update-client-status';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -64,14 +65,6 @@ export class AuthController {
 
   /**
    * Retrieve user information by id.
-   *
-   * Protected by AuthGuard: a valid JWT must be provided in the request.
-   * Forwards the request to the auth microservice using the NATS pattern 'auth.get.user'.
-   *
-   * @param id - The user's id to look up (string).
-   * @returns Observable resolved with the user object returned by the auth service
-   *          (the auth service should omit the password).
-   * @throws RpcException if the microservice call fails or returns an error.
    */
   @Get('userinfo/:id')
   @UseGuards(AuthGuard)
@@ -81,5 +74,24 @@ export class AuthController {
         throw new RpcException(error);
       }),
     );
+  }
+
+  /**
+   * Update the status of a specific client (CLIENT) OR (PRODUCER).
+   */
+  @Post('update-client-status/:clientId')
+  @UseGuards(AuthGuard)
+  updateClientStatus(
+    @Param('clientId') clientId: string,
+    @Body() body: UpdateClientStatus,
+  ) {
+    try {
+      return this.natsClient.send('auth.update.client.status', {
+        clientId,
+        active: body.active,
+      });
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 }

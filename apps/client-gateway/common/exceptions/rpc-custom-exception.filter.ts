@@ -37,8 +37,8 @@ export class RpcCustomExceptionFilter implements ExceptionFilter {
     }
 
     // Generic error handling
-    return response.status(HttpStatus.BAD_REQUEST).json({
-      status: HttpStatus.BAD_REQUEST,
+    return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
       message: typeof rpcError === 'string' ? rpcError : 'Unexpected error',
     });
   }
