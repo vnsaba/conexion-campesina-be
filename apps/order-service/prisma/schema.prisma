@@ -11,9 +11,9 @@ datasource db {
 
 enum OrderStatus {
   PENDING
+  CANCELLED
   PAID
   DELIVERED
-  CANCELLED
 }
 
 model Order {
