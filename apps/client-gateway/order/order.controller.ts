@@ -4,10 +4,10 @@ import {
   Get,
   Inject,
   Param,
-  Patch,
   Post,
   Delete,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { catchError } from 'rxjs';
@@ -17,6 +17,8 @@ import { RoleProtected, User } from '../auth/guards/decorators';
 import { ValidRoles } from '../auth/enum/valid-roles.enum';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/guards/interface/current-user.interface';
+import { OrderPaginationDto } from './dto/order-pagination.dto';
+import { CreateOrderDto } from '../../order-service/src/order/dto/create-order.dto';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -31,7 +33,10 @@ export class OrderController {
   @RoleProtected(ValidRoles.CLIENT, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Post()
-  createOrder(@User() user: CurrentUser, @Body() createOrderDto: any) {
+  createOrder(
+    @User() user: CurrentUser,
+    @Body() createOrderDto: CreateOrderDto,
+  ) {
     return this.natsClient
       .send('order.create', {
         clientId: user.id,
@@ -47,8 +52,8 @@ export class OrderController {
   @RoleProtected(ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get()
-  findAllOrders() {
-    return this.natsClient.send('order.findAll', {}).pipe(
+  findAllOrders(@Query() paginationDto: OrderPaginationDto) {
+    return this.natsClient.send('order.findAll', paginationDto).pipe(
       catchError((error) => {
         throw new RpcException(error);
       }),
@@ -64,22 +69,6 @@ export class OrderController {
         throw new RpcException(error);
       }),
     );
-  }
-
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
-  @UseGuards(AuthGuard, UserRoleGuard)
-  @Patch(':id')
-  updateOrder(@Param('id') id: string, @Body() updateOrderDto: any) {
-    return this.natsClient
-      .send('order.update', {
-        id,
-        updateOrder: updateOrderDto,
-      })
-      .pipe(
-        catchError((error) => {
-          throw new RpcException(error);
-        }),
-      );
   }
 
   @RoleProtected(ValidRoles.ADMIN)
@@ -98,6 +87,28 @@ export class OrderController {
   @Get('client/:clientId')
   findOrdersByClientId(@Param('clientId') clientId: string) {
     return this.natsClient.send('order.findByClientId', clientId).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
+  }
+
+  @RoleProtected(ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get('producer/me')
+  findOrdersByProducer(@User() user: CurrentUser) {
+    return this.natsClient.send('order.findByProducerId', user.id).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
+  }
+
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT, ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get(':orderId/details')
+  getOrderDetails(@Param('orderId') orderId: string) {
+    return this.natsClient.send('order.getOrderDetails', orderId).pipe(
       catchError((error) => {
         throw new RpcException(error);
       }),

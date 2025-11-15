@@ -2,7 +2,6 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderDto } from './dto/update-order.dto';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
 
 @Controller()
@@ -31,18 +30,6 @@ export class OrderController {
     return this.orderService.findOne(id);
   }
 
-  @MessagePattern('order.update')
-  update(
-    @Payload()
-    updatePayload: {
-      id: string;
-      updateOrder: UpdateOrderDto;
-    },
-  ) {
-    const { id, updateOrder } = updatePayload;
-    return this.orderService.update(id, updateOrder);
-  }
-
   @MessagePattern('order.remove')
   remove(@Payload() id: string) {
     return this.orderService.remove(id);
@@ -51,6 +38,11 @@ export class OrderController {
   @MessagePattern('order.findByClientId')
   findByClientId(@Payload() clientId: string) {
     return this.orderService.findByClientId(clientId);
+  }
+
+  @MessagePattern('order.findByProducerId')
+  findByProducerId(@Payload() producerId: string) {
+    return this.orderService.findByProducerId(producerId);
   }
 
   @MessagePattern('order.getOrderDetails')
