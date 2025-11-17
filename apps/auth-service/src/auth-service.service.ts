@@ -5,7 +5,7 @@ import {
   OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
-import { PrismaClient, ValidRoles } from '../generated/prisma';
+import { PrismaClient, ValidRoles, UserStatus } from '../generated/prisma';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { RpcException } from '@nestjs/microservices';
 import * as bcrypt from 'bcryptjs';
@@ -60,7 +60,10 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
           password: hashedPassword,
           fullName,
           role,
-          isActive: role !== ValidRoles.PRODUCER,
+          status:
+            role !== ValidRoles.PRODUCER
+              ? UserStatus.ACTIVE
+              : UserStatus.INACTIVE,
         },
       });
 
@@ -103,7 +106,7 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      if (!user.isActive) {
+      if (user.status !== UserStatus.ACTIVE) {
         throw new RpcException({
           status: HttpStatus.UNAUTHORIZED,
           message: 'Inactive user',
@@ -152,7 +155,7 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
       const dbUser = await this.user.findFirst({
         where: {
           id: user.id,
-          isActive: true,
+          status: UserStatus.ACTIVE,
         },
       });
 
@@ -204,6 +207,34 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
   }
 
   /**
+   * Get regular users
+   *
+   * @returns The users list.
+   * @throws {RpcException} If an internal error occurs.
+   */
+  async getUsers() {
+    try {
+      const regularUsers = await this.user.findMany({
+        where: {
+          role: { not: ValidRoles.ADMIN },
+          status: { not: UserStatus.DELETED },
+        },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+          status: true,
+        },
+      });
+
+      return regularUsers;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
    * Updates the status of a specific CLIENT or PRODUCER.
    *
    * @param clientId - The unique identifier of the client whose status is to be updated.
@@ -212,7 +243,7 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
    * @throws {RpcException} If the user is not found, the role is invalid, or an internal error occurs.
    */
   async updateClientStatus(updateClientDto: UpdateClientStatus) {
-    const { clientId, active } = updateClientDto;
+    const { clientId, newStatus } = updateClientDto;
 
     try {
       const user = await this.user.findUnique({
@@ -235,9 +266,16 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
         });
       }
 
+      if (user.status === UserStatus.DELETED) {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: `Cannot modify delete user`,
+        });
+      }
+
       const updatedUser = await this.user.update({
         where: { id: clientId },
-        data: { isActive: active },
+        data: { status: newStatus },
       });
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
