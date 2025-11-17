@@ -48,6 +48,17 @@ describe('ProductOfferService', () => {
 
     service = module.get<ProductOfferService>(ProductOfferService);
 
+    Object.defineProperty(service, 'logger', {
+      value: {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      },
+      writable: false,
+    });
+
     // Mock prisma models
     Object.defineProperty(service, 'productOffer', {
       value: {

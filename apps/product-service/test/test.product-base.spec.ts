@@ -20,6 +20,17 @@ describe('ProductBaseService', () => {
 
     service = module.get<ProductBaseService>(ProductBaseService);
 
+    Object.defineProperty(service, 'logger', {
+      value: {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+      },
+      writable: false,
+    });
+
     // prevent real DB connections
     service.$connect = jest.fn().mockResolvedValue(undefined) as any;
     service.$disconnect = jest.fn().mockResolvedValue(undefined) as any;
