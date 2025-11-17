@@ -4,7 +4,7 @@ import { RpcException } from '@nestjs/microservices';
 import { HttpStatus } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { OrderStatus } from '../../generated/prisma';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 describe('OrderService', () => {
   let service: OrderService;
@@ -60,7 +60,6 @@ describe('OrderService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
-        update: jest.fn(),
         delete: jest.fn(),
         count: jest.fn(),
       },
@@ -176,10 +175,9 @@ describe('OrderService', () => {
     });
 
     // ORDER-CP-02
-    it('ORDER-CP-02: should create order with custom status (not default)', async () => {
+    it('ORDER-CP-02: should always create order with PENDING status', async () => {
       const clientId = 'client-789';
       const createOrderDto = {
-        status: OrderStatus.PAID,
         address: 'Avenida 80 #100-50',
         orderDetails: [
           {
@@ -190,24 +188,27 @@ describe('OrderService', () => {
         ],
       };
 
-      const mockOrderPaid = {
+      const mockOrderCreated = {
         ...mockOrder,
-        status: OrderStatus.PAID,
+        id: 'order-id-789',
+        status: OrderStatus.PENDING,
       };
 
       mockNatsClient.send.mockReturnValue(of({ valid: true }));
-      (service['order'].create as jest.Mock).mockResolvedValue(mockOrderPaid);
+      (service['order'].create as jest.Mock).mockResolvedValue(
+        mockOrderCreated,
+      );
 
       const result = await service.create(clientId, createOrderDto);
 
       expect(service['order'].create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            status: 'PAID',
+            status: 'PENDING',
           }),
         }),
       );
-      expect(result.status).toBe(OrderStatus.PAID);
+      expect(result.status).toBe(OrderStatus.PENDING);
     });
 
     // ORDER-CP-03
@@ -540,65 +541,9 @@ describe('OrderService', () => {
     });
   });
 
-  describe('update', () => {
-    // ORDER-CP-14
-    it('ORDER-CP-14: should update order status successfully', async () => {
-      const updatedOrder = {
-        ...mockOrder,
-        status: OrderStatus.DELIVERED,
-        updatedAt: new Date(),
-      };
-
-      (service['order'].findUnique as jest.Mock).mockResolvedValue(mockOrder);
-      (service['order'].update as jest.Mock).mockResolvedValue(updatedOrder);
-
-      const result = await service.update('order-id-123', {
-        status: OrderStatus.DELIVERED,
-      });
-
-      expect(service['order'].update).toHaveBeenCalledWith({
-        where: { id: 'order-id-123' },
-        data: {
-          status: OrderStatus.DELIVERED,
-        },
-        include: {
-          orderDetails: true,
-        },
-      });
-      expect(result.status).toBe(OrderStatus.DELIVERED);
-      expect(service['logger'].log).toHaveBeenCalledWith(
-        'Order updated successfully: order-id-123',
-      );
-    });
-
-    // ORDER-CP-15
-    it('ORDER-CP-15: should throw NOT_FOUND when updating non-existent order', async () => {
-      (service['order'].findUnique as jest.Mock).mockResolvedValue(null);
-
-      await expect(
-        service.update('invalid-id', { status: OrderStatus.PAID }),
-      ).rejects.toThrow(RpcException);
-
-      try {
-        await service.update('invalid-id', { status: OrderStatus.PAID });
-      } catch (error) {
-        expect(error).toBeInstanceOf(RpcException);
-        expect(error.getError()).toEqual({
-          status: HttpStatus.NOT_FOUND,
-          message: "Order with id 'invalid-id' not found",
-        });
-      }
-
-      expect(service['order'].update).not.toHaveBeenCalled();
-      expect(service['logger'].log).not.toHaveBeenCalledWith(
-        expect.stringContaining('Order updated successfully'),
-      );
-    });
-  });
-
   describe('remove', () => {
-    // ORDER-CP-16
-    it('ORDER-CP-16: should delete order and its details successfully', async () => {
+    // ORDER-CP-14
+    it('ORDER-CP-14: should delete order and its details successfully', async () => {
       (service['order'].findUnique as jest.Mock).mockResolvedValue(mockOrder);
       (service['order'].delete as jest.Mock).mockResolvedValue(mockOrder);
 
@@ -616,8 +561,8 @@ describe('OrderService', () => {
       );
     });
 
-    // ORDER-CP-17
-    it('ORDER-CP-17: should throw NOT_FOUND when deleting non-existent order', async () => {
+    // ORDER-CP-15
+    it('ORDER-CP-15: should throw NOT_FOUND when deleting non-existent order', async () => {
       (service['order'].findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(service.remove('invalid-id')).rejects.toThrow(RpcException);
@@ -640,8 +585,8 @@ describe('OrderService', () => {
   });
 
   describe('findByClientId', () => {
-    // ORDER-CP-18
-    it('ORDER-CP-18: should return all orders for a specific client', async () => {
+    // ORDER-CP-16
+    it('ORDER-CP-16: should return all orders for a specific client', async () => {
       const mockClientOrders = Array.from({ length: 3 }, (_, i) => ({
         ...mockOrder,
         id: `order-${i}`,
@@ -669,8 +614,8 @@ describe('OrderService', () => {
       expect(result[0].orderDetails).toBeDefined();
     });
 
-    // ORDER-CP-19
-    it('ORDER-CP-19: should return empty array when client has no orders', async () => {
+    // ORDER-CP-17
+    it('ORDER-CP-17: should return empty array when client has no orders', async () => {
       (service['order'].findMany as jest.Mock).mockResolvedValue([]);
 
       const result = await service.findByClientId('client-sin-ordenes');
@@ -689,8 +634,8 @@ describe('OrderService', () => {
   });
 
   describe('getOrderDetails', () => {
-    // ORDER-CP-20
-    it('ORDER-CP-20: should return order details for existing order', async () => {
+    // ORDER-CP-18
+    it('ORDER-CP-18: should return order details for existing order', async () => {
       const mockOrderDetails = [
         {
           id: 'detail-1',
@@ -732,8 +677,8 @@ describe('OrderService', () => {
       expect(result[1].subtotal).toBe(15000);
     });
 
-    // ORDER-CP-21
-    it('ORDER-CP-21: should throw NOT_FOUND when getting details of non-existent order', async () => {
+    // ORDER-CP-19
+    it('ORDER-CP-19: should throw NOT_FOUND when getting details of non-existent order', async () => {
       (service['order'].findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(service.getOrderDetails('invalid-id')).rejects.toThrow(
@@ -751,6 +696,312 @@ describe('OrderService', () => {
       }
 
       expect(service['orderDetails'].findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findByProducerId', () => {
+    // ORDER-CP-20
+    it('ORDER-CP-20: should return orders with PAID status for producer products', async () => {
+      const producerId = 'producer-123';
+      const mockProductOffers = [
+        { id: 'prod-offer-1', producerId: 'producer-123' },
+        { id: 'prod-offer-2', producerId: 'producer-123' },
+      ];
+
+      const mockOrders = [
+        {
+          ...mockOrder,
+          id: 'order-1',
+          clientId: 'client-1',
+          status: OrderStatus.PAID,
+          orderDetails: [
+            {
+              id: 'detail-1',
+              orderId: 'order-1',
+              productOfferId: 'prod-offer-1',
+              quantity: 2,
+              price: 10000,
+              subtotal: 20000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+            {
+              id: 'detail-2',
+              orderId: 'order-1',
+              productOfferId: 'other-prod',
+              quantity: 1,
+              price: 5000,
+              subtotal: 5000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        },
+        {
+          ...mockOrder,
+          id: 'order-2',
+          clientId: 'client-2',
+          status: OrderStatus.PAID,
+          orderDetails: [
+            {
+              id: 'detail-3',
+              orderId: 'order-2',
+              productOfferId: 'prod-offer-2',
+              quantity: 3,
+              price: 8000,
+              subtotal: 24000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        },
+      ];
+
+      const mockClients = [
+        { id: 'client-1', fullName: 'Juan Pérez' },
+        { id: 'client-2', fullName: 'María García' },
+      ];
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockProductOffers))
+        .mockReturnValueOnce(of(mockClients[0]))
+        .mockReturnValueOnce(of(mockClients[1]));
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue(mockOrders);
+
+      const result = await service.findByProducerId(producerId);
+
+      expect(mockNatsClient.send).toHaveBeenCalledWith(
+        'product.offer.findAllProducer',
+        producerId,
+      );
+      expect(service['order'].findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'PAID',
+          orderDetails: {
+            some: {
+              productOfferId: {
+                in: ['prod-offer-1', 'prod-offer-2'],
+              },
+            },
+          },
+        },
+        include: {
+          orderDetails: true,
+        },
+        orderBy: { orderDate: 'desc' },
+      });
+      expect(result).toHaveLength(2);
+      expect(result[0].clientName).toBe('Juan Pérez');
+      expect(result[1].clientName).toBe('María García');
+      expect(result[0].orderDetails).toHaveLength(1);
+      expect(result[0].orderDetails[0].productOfferId).toBe('prod-offer-1');
+      expect(result[1].orderDetails).toHaveLength(1);
+      expect(result[1].orderDetails[0].productOfferId).toBe('prod-offer-2');
+    });
+
+    // ORDER-CP-21
+    it('ORDER-CP-21: should return empty array when producer has no product offers', async () => {
+      const producerId = 'producer-456';
+
+      mockNatsClient.send.mockReturnValue(of([]));
+
+      const result = await service.findByProducerId(producerId);
+
+      expect(mockNatsClient.send).toHaveBeenCalledWith(
+        'product.offer.findAllProducer',
+        producerId,
+      );
+      expect(service['order'].findMany).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
+    });
+
+    // ORDER-CP-22
+    it('ORDER-CP-22: should return empty array when producer has no orders', async () => {
+      const producerId = 'producer-789';
+      const mockProductOffers = [
+        { id: 'prod-offer-3', producerId: 'producer-789' },
+      ];
+
+      mockNatsClient.send.mockReturnValue(of(mockProductOffers));
+      (service['order'].findMany as jest.Mock).mockResolvedValue([]);
+
+      const result = await service.findByProducerId(producerId);
+
+      expect(service['order'].findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'PAID',
+          orderDetails: {
+            some: {
+              productOfferId: {
+                in: ['prod-offer-3'],
+              },
+            },
+          },
+        },
+        include: {
+          orderDetails: true,
+        },
+        orderBy: { orderDate: 'desc' },
+      });
+      expect(result).toEqual([]);
+    });
+
+    // ORDER-CP-23
+    it('ORDER-CP-23: should filter order details to only include producer products', async () => {
+      const producerId = 'producer-123';
+      const mockProductOffers = [
+        { id: 'prod-offer-1', producerId: 'producer-123' },
+      ];
+
+      const mockOrderWithMixedProducts = {
+        ...mockOrder,
+        id: 'order-mixed',
+        clientId: 'client-1',
+        status: OrderStatus.PAID,
+        orderDetails: [
+          {
+            id: 'detail-1',
+            orderId: 'order-mixed',
+            productOfferId: 'prod-offer-1',
+            quantity: 2,
+            price: 10000,
+            subtotal: 20000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 'detail-2',
+            orderId: 'order-mixed',
+            productOfferId: 'other-producer-prod',
+            quantity: 1,
+            price: 5000,
+            subtotal: 5000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockProductOffers))
+        .mockReturnValueOnce(of({ id: 'client-1', fullName: 'Test Client' }));
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue([
+        mockOrderWithMixedProducts,
+      ]);
+
+      const result = await service.findByProducerId(producerId);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].orderDetails).toHaveLength(1);
+      expect(result[0].orderDetails[0].productOfferId).toBe('prod-offer-1');
+      expect(result[0].clientName).toBe('Test Client');
+    });
+
+    // ORDER-CP-24
+    it('ORDER-CP-24: should handle client fetch errors gracefully', async () => {
+      const producerId = 'producer-123';
+      const mockProductOffers = [
+        { id: 'prod-offer-1', producerId: 'producer-123' },
+      ];
+
+      const mockOrderWithError = {
+        ...mockOrder,
+        id: 'order-1',
+        clientId: 'client-1',
+        status: OrderStatus.PAID,
+        orderDetails: [
+          {
+            id: 'detail-1',
+            orderId: 'order-1',
+            productOfferId: 'prod-offer-1',
+            quantity: 2,
+            price: 10000,
+            subtotal: 20000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockProductOffers))
+        .mockReturnValueOnce(throwError(() => new Error('Client not found')));
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue([
+        mockOrderWithError,
+      ]);
+
+      const result = await service.findByProducerId(producerId);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].clientName).toBe('Unknown Client');
+    });
+
+    // ORDER-CP-25
+    it('ORDER-CP-25: should only return orders with PAID status', async () => {
+      const producerId = 'producer-123';
+      const mockProductOffers = [
+        { id: 'prod-offer-1', producerId: 'producer-123' },
+      ];
+
+      const mockOrders = [
+        {
+          ...mockOrder,
+          id: 'order-paid',
+          status: OrderStatus.PAID,
+          orderDetails: [
+            {
+              id: 'detail-1',
+              orderId: 'order-paid',
+              productOfferId: 'prod-offer-1',
+              quantity: 1,
+              price: 10000,
+              subtotal: 10000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        },
+        {
+          ...mockOrder,
+          id: 'order-pending',
+          status: OrderStatus.PENDING,
+          orderDetails: [
+            {
+              id: 'detail-2',
+              orderId: 'order-pending',
+              productOfferId: 'prod-offer-1',
+              quantity: 1,
+              price: 10000,
+              subtotal: 10000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        },
+      ];
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockProductOffers))
+        .mockReturnValueOnce(of({ id: 'client-1', fullName: 'Test Client' }));
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue([
+        mockOrders[0],
+      ]);
+
+      const result = await service.findByProducerId(producerId);
+
+      expect(service['order'].findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'PAID',
+          }),
+        }),
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0].status).toBe(OrderStatus.PAID);
     });
   });
 });
