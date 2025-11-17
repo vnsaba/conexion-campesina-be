@@ -20,7 +20,7 @@ function setupSwagger(app) {
         in: 'header',
         description: 'Enter JWT token (prefixed with "Bearer ")',
       },
-      'bearer', // security name
+      'bearer',
     )
     .build();
 
