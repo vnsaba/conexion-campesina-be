@@ -47,16 +47,16 @@ export class ReviewController {
     if (!productOffer) {
       throw new RpcException('The product offer does not exist in any order');
     }
-    return this.natsClient
-      .send('create.Review', {
-        clientId: user.id,
-        createReview: createReviewDto,
-      })
-      .pipe(
-        catchError((error) => {
-          throw new RpcException(error);
+    try {
+      return await firstValueFrom(
+        this.natsClient.send('create.Review', {
+          clientId: user.id,
+          createReview: createReviewDto,
         }),
       );
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
   /**
@@ -194,7 +194,7 @@ export class ReviewController {
    * @param id Review id to delete
    * @returns A success message or an RPC error
    */
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
+  @RoleProtected(ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Delete('admin/:id')
   removeReviewAdmin(@Param('id') id: string) {
