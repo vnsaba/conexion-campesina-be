@@ -16,7 +16,7 @@ const mockClientUser = {
   id: 'client-uuid-123',
   email: 'client@example.com',
   role: ValidRoles.CLIENT,
-  isActive: true,
+  status: 'ACTIVE',
   password: 'hashedpassword123',
 };
 
@@ -24,7 +24,7 @@ const mockProducerUser = {
   id: 'producer-uuid-456',
   email: 'producer@example.com',
   role: ValidRoles.PRODUCER,
-  isActive: true,
+  status: 'ACTIVE',
   password: 'hashedpassword456',
 };
 
@@ -32,7 +32,15 @@ const mockAdminUser = {
   id: 'admin-uuid-789',
   email: 'admin@example.com',
   role: ValidRoles.ADMIN,
-  isActive: true,
+  status: 'ACTIVE',
+  password: 'hashedpassword789',
+};
+
+const mockClientDeleted = {
+  id: 'client-uuid-495',
+  email: 'sbsmrth@gmail.com',
+  role: ValidRoles.CLIENT,
+  status: 'DELETED',
   password: 'hashedpassword789',
 };
 
@@ -71,10 +79,10 @@ describe('AuthServiceService (updateClientStatus)', () => {
   it('should successfully update a CLIENT status', async () => {
     const dto: UpdateClientStatus = {
       clientId: 'client-uuid-123',
-      active: false,
+      newStatus: 'INACTIVE',
     };
 
-    const updatedUser = { ...mockClientUser, isActive: false };
+    const updatedUser = { ...mockClientUser, status: dto.newStatus };
 
     mockUserRepo.findUnique.mockResolvedValue(mockClientUser);
     mockUserRepo.update.mockResolvedValue(updatedUser);
@@ -87,14 +95,14 @@ describe('AuthServiceService (updateClientStatus)', () => {
 
     expect(mockUserRepo.update).toHaveBeenCalledWith({
       where: { id: dto.clientId },
-      data: { isActive: dto.active },
+      data: { status: dto.newStatus },
     });
 
     expect(result).toEqual({
       id: 'client-uuid-123',
       email: 'client@example.com',
       role: ValidRoles.CLIENT,
-      isActive: false,
+      status: 'INACTIVE',
     });
 
     // @ts-expect-error Password is already excluded in the service method
@@ -104,10 +112,10 @@ describe('AuthServiceService (updateClientStatus)', () => {
   it('should successfully update a PRODUCER status', async () => {
     const dto: UpdateClientStatus = {
       clientId: 'producer-uuid-456',
-      active: false,
+      newStatus: 'INACTIVE',
     };
 
-    const updatedUser = { ...mockProducerUser, isActive: false };
+    const updatedUser = { ...mockProducerUser, status: dto.newStatus };
 
     mockUserRepo.findUnique.mockResolvedValue(mockProducerUser);
     mockUserRepo.update.mockResolvedValue(updatedUser);
@@ -119,10 +127,10 @@ describe('AuthServiceService (updateClientStatus)', () => {
     });
     expect(mockUserRepo.update).toHaveBeenCalledWith({
       where: { id: dto.clientId },
-      data: { isActive: dto.active },
+      data: { status: dto.newStatus },
     });
 
-    expect(result!.isActive).toBe(false);
+    expect(result!.status).toBe('INACTIVE');
     expect(result!.role).toBe(ValidRoles.PRODUCER);
 
     // @ts-expect-error Password is already excluded in the service method
@@ -132,7 +140,7 @@ describe('AuthServiceService (updateClientStatus)', () => {
   it('should throw RpcException (NOT_FOUND) if user is not found', async () => {
     const dto: UpdateClientStatus = {
       clientId: 'non-existent-id',
-      active: true,
+      newStatus: 'ACTIVE',
     };
 
     mockUserRepo.findUnique.mockResolvedValue(null);
@@ -150,7 +158,7 @@ describe('AuthServiceService (updateClientStatus)', () => {
   it('should throw RpcException (FORBIDDEN) if user role is invalid', async () => {
     const dto: UpdateClientStatus = {
       clientId: 'admin-uuid-789',
-      active: false,
+      newStatus: 'INACTIVE',
     };
 
     mockUserRepo.findUnique.mockResolvedValue(mockAdminUser);
@@ -165,10 +173,28 @@ describe('AuthServiceService (updateClientStatus)', () => {
     expect(handleErrorSpy).toHaveBeenCalledWith(expect.any(RpcException));
   });
 
+  it('should throw RpcException (BAD_REQUEST) if user status is DELETED', async () => {
+    const dto: UpdateClientStatus = {
+      clientId: 'client-uuid-495',
+      newStatus: 'ACTIVE',
+    };
+
+    mockUserRepo.findUnique.mockResolvedValue(mockClientDeleted);
+
+    await expect(service.updateClientStatus(dto)).rejects.toThrow(RpcException);
+
+    await expect(service.updateClientStatus(dto)).rejects.toThrow(
+      'Cannot modify delete user',
+    );
+
+    expect(mockUserRepo.update).not.toHaveBeenCalled();
+    expect(handleErrorSpy).toHaveBeenCalledWith(expect.any(RpcException));
+  });
+
   it('should call handleError on a general database error', async () => {
     const dto: UpdateClientStatus = {
       clientId: 'client-uuid-123',
-      active: false,
+      newStatus: 'INACTIVE',
     };
     const dbError = new Error('Database connection lost');
 
