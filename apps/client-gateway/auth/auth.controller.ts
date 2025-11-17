@@ -91,8 +91,22 @@ export class AuthController {
     try {
       return this.natsClient.send('auth.update.client.status', {
         clientId,
-        active: body.active,
+        newStatus: body.newStatus,
       });
+    } catch (error) {
+      throw new RpcException(error);
+    }
+  }
+
+  /**
+   * Get regular users
+   */
+  @RoleProtected(ValidRoles.ADMIN)
+  @Get('users')
+  @UseGuards(AuthGuard, UserRoleGuard)
+  getUsers() {
+    try {
+      return this.natsClient.send('auth.get.users', {});
     } catch (error) {
       throw new RpcException(error);
     }

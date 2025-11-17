@@ -29,10 +29,15 @@ export class AuthServiceController {
     return this.authServiceService.getByUser(userId);
   }
 
+  @MessagePattern('auth.get.users')
+  getUsers() {
+    return this.authServiceService.getUsers();
+  }
+
   @MessagePattern('auth.update.client.status')
   updateClientStatus(@Payload() updateClientStatusDto: UpdateClientStatus) {
-    const { clientId, active } = updateClientStatusDto;
+    const { clientId, newStatus } = updateClientStatusDto;
 
-    return this.authServiceService.updateClientStatus({ clientId, active });
+    return this.authServiceService.updateClientStatus({ clientId, newStatus });
   }
 }
