@@ -81,7 +81,7 @@ export class ReviewController {
    * Sends a request to the review service and returns the list of reviews.
    * @returns An array of reviews
    */
-  @RoleProtected(ValidRoles.ADMIN)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get()
   findAllReviews() {
@@ -90,6 +90,20 @@ export class ReviewController {
         throw new RpcException(error);
       }),
     );
+  }
+
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get('summary/:productOfferId')
+  summaryReviews(@Param('productOfferId') productOfferId: string) {
+    console.log(productOfferId);
+    return this.natsClient
+      .send('findAverageRating.Review.ProductOffer', productOfferId)
+      .pipe(
+        catchError((error) => {
+          throw new RpcException(error);
+        }),
+      );
   }
 
   /**

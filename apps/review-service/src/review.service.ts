@@ -1,12 +1,26 @@
-import { Injectable, Logger, OnModuleInit, HttpStatus } from '@nestjs/common';
-import { RpcException } from '@nestjs/microservices';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  HttpStatus,
+  Inject,
+} from '@nestjs/common';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaClient } from '../generated/prisma';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
+import { catchError, firstValueFrom, of } from 'rxjs';
 
 @Injectable()
 export class ReviewService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger('ReviewService');
+
+  constructor(
+    @Inject(process.env.NATS_SERVICE_KEY || 'NATS_SERVICE')
+    private readonly natsClient: ClientProxy,
+  ) {
+    super();
+  }
   /**
    * Initializes the database connection when the module starts.
    * @returns Promise that resolves when the connection is established
@@ -77,10 +91,38 @@ export class ReviewService extends PrismaClient implements OnModuleInit {
    */
   async findAllProductOffer(productOfferId: string) {
     try {
-      return await this.review.findMany({
+      const reviewProduct = await this.review.findMany({
         where: { productOfferId },
         orderBy: { createdAt: 'desc' },
       });
+
+      // Consultar cada cliente al microservicio AUTH
+      const usersReviewsPromises = reviewProduct.map((rw) =>
+        firstValueFrom(
+          this.natsClient.send('auth.get.user', rw.clientId).pipe(
+            catchError(() =>
+              of({
+                id: rw.clientId,
+                fullName: 'Unknown Client',
+              }),
+            ),
+          ),
+        ),
+      );
+
+      const userReviews = await Promise.all(usersReviewsPromises);
+
+      // Crear mapa de clientes
+      const clientMap = new Map<string, string>();
+      userReviews.forEach((client: { id: string; fullName: string }) => {
+        clientMap.set(client.id, client.fullName);
+      });
+
+      // Retornar reviews con nombre del cliente
+      return reviewProduct.map((review) => ({
+        ...review,
+        clientName: clientMap.get(review.clientId) || 'Unknown Client',
+      }));
     } catch (error) {
       this.logger.error('Error fetching product reviews', error.stack);
       throw new RpcException({
@@ -117,11 +159,41 @@ export class ReviewService extends PrismaClient implements OnModuleInit {
    */
   async findAverageRatingProduct(productOfferId: string) {
     try {
+      // Calcular promedio
       const result = await this.review.aggregate({
         _avg: { rating: true },
+        _count: { rating: true },
         where: { productOfferId },
       });
-      return { averageRating: result._avg.rating ?? 0 };
+
+      // Contar reviews por rating
+      const ratingCounts = await this.review.groupBy({
+        by: ['rating'],
+        where: { productOfferId },
+        _count: { rating: true },
+      });
+
+      // Transformar a formato amigable para el frontend
+      const ratingDistribution = {
+        5: 0,
+        4: 0,
+        3: 0,
+        2: 0,
+        1: 0,
+      };
+
+      // Llenar con los datos reales
+      ratingCounts.forEach((item) => {
+        ratingDistribution[item.rating] = item._count.rating;
+      });
+
+      return {
+        averageRating: result._avg.rating
+          ? parseFloat(result._avg.rating.toFixed(1))
+          : 0,
+        totalReviews: result._count.rating || 0,
+        ratingDistribution,
+      };
     } catch (error) {
       this.logger.error('Error calculating average rating', error.stack);
       throw new RpcException({

@@ -1,25 +1,32 @@
 import {
-  HttpStatus,
   Injectable,
   Logger,
-  NotFoundException,
   OnModuleInit,
+  HttpStatus,
+  Inject,
+  NotFoundException,
 } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
-
+import { ClientProxy } from '@nestjs/microservices';
 import { Category, Prisma, PrismaClient } from '../../generated/prisma';
 import { CreateProductOfferDto } from './dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from './dto/update-product-offer.dto';
 import { CategoryEnum } from './enum/category.enum';
+import { catchError, firstValueFrom, of } from 'rxjs';
 
 type ProductOfferWithRelations = Prisma.ProductOfferGetPayload<{
   include: { productBase: true };
-}>;
+}> & { producerName?: string };
 
 @Injectable()
 export class ProductOfferService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger('ProductOfferService');
-
+  constructor(
+    @Inject(process.env.NATS_SERVICE_KEY || 'NATS_SERVICE')
+    private readonly natsClient: ClientProxy,
+  ) {
+    super();
+  }
   /**
    * Initializes the database connection when the module starts
    */
@@ -134,7 +141,19 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       if (!productOffer) {
         throw new NotFoundException(`ProductOffer with id '${id}' not found`);
       }
-      return productOffer;
+
+      const userProduct = await firstValueFrom(
+        this.natsClient.send('auth.get.user', productOffer.producerId).pipe(
+          catchError(() =>
+            of({
+              id: productOffer.producerId,
+              fullName: 'Unknown Client',
+            }),
+          ),
+        ),
+      );
+
+      return { ...productOffer, producerName: userProduct.fullName };
     } catch (error: unknown) {
       if (error instanceof NotFoundException) {
         throw new RpcException({
@@ -142,11 +161,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
           message: error.message,
         });
       }
-
-      this.logger.error(
-        `Error fetching product offer with id ${id}`,
-        (error as Error).stack,
-      );
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to fetch product offer',
