@@ -11,6 +11,7 @@ import { Category, Prisma, PrismaClient } from '../../generated/prisma';
 import { CreateProductOfferDto } from './dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from './dto/update-product-offer.dto';
 import { CategoryEnum } from './enum/category.enum';
+import { RpcError } from 'libs/helpers/rcp-error.helpers';
 
 type ProductOfferWithRelations = Prisma.ProductOfferGetPayload<{
   include: { productBase: true };
@@ -392,6 +393,22 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to retrieve product offers by category',
       });
+    }
+  }
+
+  async updateAvailability(productOfferId: string, available: boolean) {
+    try {
+      await this.productOffer.update({
+        where: { id: productOfferId },
+        data: { isAvailable: available },
+      });
+    } catch (error) {
+      RpcError.handle(
+        this.logger,
+        'ProductOfferService',
+        error,
+        'Failed to update product offer availability',
+      );
     }
   }
 }

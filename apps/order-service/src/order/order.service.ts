@@ -7,10 +7,15 @@ import {
   Inject,
 } from '@nestjs/common';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
-import { PrismaClient } from '../../generated/prisma';
+import {
+  OrderDetails,
+  OrderStatus,
+  PrismaClient,
+} from '../../generated/prisma';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { firstValueFrom } from 'rxjs';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 @Injectable()
 export class OrderService extends PrismaClient implements OnModuleInit {
@@ -121,8 +126,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
           orderDetails: true,
         },
       });
-
-      this.logger.log(`Order created successfully: ${order.id}`);
+      this.publishOrderPendingEvents(order.orderDetails);
       return order;
     } catch (error) {
       if (error instanceof RpcException) {
@@ -134,6 +138,15 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to create order',
       });
+    }
+  }
+  private publishOrderPendingEvents(orderDetails: OrderDetails[]) {
+    for (const detail of orderDetails) {
+      const data = {
+        productOfferId: detail.productOfferId,
+        quantity: detail.quantity,
+      };
+      this.natsClient.emit('order.pending', data);
     }
   }
 
@@ -409,6 +422,43 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Error al verificar los detalles de la orden',
+      });
+    }
+  }
+
+  async updateStatus(updateStatus: UpdateOrderStatusDto) {
+    try {
+      const { orderId, status } = updateStatus;
+
+      const existingOrder = await this.findOne(orderId);
+
+      const updatedOrder = await this.order.update({
+        where: { id: existingOrder.id },
+        data: { status },
+        include: { orderDetails: true },
+      });
+      this.publishOrderStatusEvents(status, updatedOrder.orderDetails);
+      return updatedOrder;
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+    }
+  }
+
+  private publishOrderStatusEvents(
+    status: OrderStatus,
+    orderDetails: OrderDetails[],
+  ) {
+    const detailEventMap = {
+      PAID: 'order.confirmed',
+      CANCELLED: 'order.cancelled',
+    };
+    const eventName = detailEventMap[status];
+    for (const detail of orderDetails) {
+      this.natsClient.emit(eventName, {
+        productOfferId: detail.productOfferId,
+        quantity: detail.quantity,
       });
     }
   }

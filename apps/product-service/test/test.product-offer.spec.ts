@@ -244,7 +244,7 @@ describe('ProductOfferService', () => {
 
     it('should succeed with different valid Unit enum values', async () => {
       const units = [Unit.KILOGRAMO, Unit.GRAMO, Unit.LIBRA, Unit.UNIDAD];
-      
+
       for (const unit of units) {
         const dto = { ...createDto, unit };
         (service.productBase.findUnique as jest.Mock).mockResolvedValue(

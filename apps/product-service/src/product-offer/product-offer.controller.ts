@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 
 import { CreateProductOfferDto } from './dto/create-product-offer.dto';
 import { UpdateProductOfferDto } from './dto/update-product-offer.dto';
@@ -66,5 +66,15 @@ export class ProductOfferController {
   @MessagePattern('product.offer.searchByCategory')
   findAllProductOffersByCategory(@Payload() category: string) {
     return this.productOfferService.findAllProductOffersByCategory(category);
+  }
+
+  @EventPattern('product.offer.updateAvailability')
+  updateAvailability(
+    @Payload() payload: { productOfferId: string; available: boolean },
+  ) {
+    return this.productOfferService.updateAvailability(
+      payload.productOfferId,
+      payload.available,
+    );
   }
 }
