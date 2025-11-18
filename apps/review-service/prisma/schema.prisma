@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("REVIEW_MS_DATABASE_URL")
+}
+
+model Review {
+  id              String   @id @map("_id") @default(auto()) @db.ObjectId
+  rating          Int
+  comments        String?
+  productOfferId  String   @db.ObjectId
+  clientId        String   @db.ObjectId
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([productOfferId])
+  @@index([clientId])
+  @@unique([productOfferId, clientId])
+}

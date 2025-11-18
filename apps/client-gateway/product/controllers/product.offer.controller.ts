@@ -163,12 +163,13 @@ export class ProductOfferController {
         'Cannot delete product offer associated with existing orders.',
       );
     }
-
-    return this.natsClient.send('product.offer.remove', id).pipe(
-      catchError((error) => {
-        throw new RpcException(error);
-      }),
-    );
+    try {
+      return await firstValueFrom(
+        this.natsClient.send('product.offer.remove', id),
+      );
+    } catch (error) {
+      throw new RpcException(error);
+    }
   }
 
   /**

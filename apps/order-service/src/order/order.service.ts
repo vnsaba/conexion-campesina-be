@@ -16,6 +16,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { firstValueFrom } from 'rxjs';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { catchError, of } from 'rxjs';
 
 @Injectable()
 export class OrderService extends PrismaClient implements OnModuleInit {
@@ -339,8 +340,33 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         orderBy: { orderDate: 'desc' },
       });
 
+      const uniqueClientIds = [
+        ...new Set(orders.map((order) => order.clientId)),
+      ];
+
+      const clientPromises = uniqueClientIds.map((clientId) =>
+        firstValueFrom(
+          this.natsClient.send('auth.get.user', clientId).pipe(
+            catchError(() =>
+              of({
+                id: clientId,
+                fullName: 'Unknown Client',
+              }),
+            ),
+          ),
+        ),
+      );
+
+      const clients = await Promise.all(clientPromises);
+
+      const clientMap = new Map<string, string>();
+      clients.forEach((client: { id: string; fullName: string }) => {
+        clientMap.set(client.id, client.fullName);
+      });
+
       return orders.map((order) => ({
         ...order,
+        clientName: clientMap.get(order.clientId) || 'Unknown Client',
         orderDetails: order.orderDetails.filter((detail) =>
           productOfferIds.includes(detail.productOfferId),
         ),

@@ -29,15 +29,6 @@
         "tsConfigPath": "apps/auth-service/tsconfig.app.json"
       }
     },
-    "catalog-service": {
-      "type": "application",
-      "root": "apps/catalog-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/catalog-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/catalog-service/tsconfig.app.json"
-      }
-    },
     "client-gateway": {
       "type": "application",
       "root": "apps/client-gateway",
@@ -99,6 +90,15 @@
       "sourceRoot": "apps/product-service/src",
       "compilerOptions": {
         "tsConfigPath": "apps/product-service/tsconfig.app.json"
+      }
+    },
+    "review-service": {
+      "type": "application",
+      "root": "apps/review-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/review-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/review-service/tsconfig.app.json"
       }
     }
   }

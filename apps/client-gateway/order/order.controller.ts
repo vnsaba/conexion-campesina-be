@@ -82,11 +82,11 @@ export class OrderController {
     );
   }
 
-  @RoleProtected(ValidRoles.CLIENT, ValidRoles.ADMIN)
+  @RoleProtected(ValidRoles.CLIENT)
   @UseGuards(AuthGuard, UserRoleGuard)
-  @Get('client/:clientId')
-  findOrdersByClientId(@Param('clientId') clientId: string) {
-    return this.natsClient.send('order.findByClientId', clientId).pipe(
+  @Get('client/me')
+  findOrdersByClientId(@User() user: CurrentUser) {
+    return this.natsClient.send('order.findByClientId', user.id).pipe(
       catchError((error) => {
         throw new RpcException(error);
       }),
