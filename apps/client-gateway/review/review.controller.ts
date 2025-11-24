@@ -43,7 +43,7 @@ export class ReviewController {
     @Body() createReviewDto: CreateReviewDto,
   ) {
     const { productOfferId } = createReviewDto;
-    const productOffer = await this.existProductOffer(productOfferId);
+    const productOffer = await this.existProductOffer(productOfferId, user.id);
     if (!productOffer) {
       throw new RpcException('The product offer does not exist in any order');
     }
@@ -63,11 +63,11 @@ export class ReviewController {
    * Checks if a review is associated with any product offer.
    * Sends a message to the product service to verify its existence in productsOrders.
    */
-  async existProductOffer(id: string): Promise<boolean> {
+  async existProductOffer(id: string, clientId: string): Promise<boolean> {
     try {
       const existProductOfferObservable = this.natsClient.send(
-        'product.offer.findOne',
-        id,
+        'order.existsProductOffer',
+        { productOfferId: id, clientId },
       );
       const productOffer = await firstValueFrom(existProductOfferObservable);
       return !!productOffer;

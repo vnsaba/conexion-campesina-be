@@ -3,6 +3,7 @@ import { RpcException } from '@nestjs/microservices';
 import { ProductOfferService } from '../src/product-offer/product-offer.service';
 import { Category, Unit } from '../generated/prisma';
 import { CreateProductOfferDto } from '../src/product-offer/dto/create-product-offer.dto';
+import { of } from 'rxjs';
 
 describe('ProductOfferService', () => {
   let service: ProductOfferService;
@@ -41,9 +42,21 @@ describe('ProductOfferService', () => {
     isAvailable: true,
   };
 
+  // Mock NATS ClientProxy
+  const mockNatsClient = {
+    send: jest.fn().mockReturnValue(of({ id: 'producer123', fullName: 'Producer Name' })),
+    emit: jest.fn().mockReturnValue(of({})),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ProductOfferService],
+      providers: [
+        ProductOfferService,
+        {
+          provide: 'NATS_SERVICE',
+          useValue: mockNatsClient,
+        },
+      ],
     }).compile();
 
     service = module.get<ProductOfferService>(ProductOfferService);
@@ -81,6 +94,10 @@ describe('ProductOfferService', () => {
 
     service.$connect = jest.fn().mockResolvedValue(undefined);
     service.$disconnect = jest.fn().mockResolvedValue(undefined);
+    
+    // Reset NATS client mocks
+    mockNatsClient.send.mockClear();
+    mockNatsClient.emit.mockClear();
   });
 
   afterEach(async () => {
@@ -364,7 +381,10 @@ describe('ProductOfferService', () => {
       );
 
       const result = await service.findOne(mockProductOffer.id);
-      expect(result).toEqual(mockProductOffer);
+      expect(result).toEqual({
+        ...mockProductOffer,
+        producerName: 'Producer Name',
+      });
     });
 
     it('should fail when product offer not found', async () => {

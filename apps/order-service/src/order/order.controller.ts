@@ -54,4 +54,16 @@ export class OrderController {
   existsProductOffer(@Payload() productOfferId: string) {
     return this.orderService.existsProductOffer(productOfferId);
   }
+
+  @MessagePattern('order.existsProductOffer')
+  existsProductOrderClient(
+    @Payload()
+    payloadProductOrder: {
+      productOfferId: string;
+      clientId: string;
+    },
+  ) {
+    const { productOfferId, clientId } = payloadProductOrder;
+    return this.orderService.existsProductOrderClient(productOfferId, clientId);
+  }
 }

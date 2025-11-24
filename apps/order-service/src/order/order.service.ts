@@ -438,4 +438,36 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       });
     }
   }
+
+  async existsProductOrderClient(
+    productOfferId: string,
+    clientId: string,
+  ): Promise<boolean> {
+    try {
+      const orderDetail = await this.orderDetails.findFirst({
+        where: {
+          productOfferId,
+          order: {
+            clientId,
+          },
+        },
+      });
+
+      return !!orderDetail;
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Error verifying if product '${productOfferId}' exists in client's orders`,
+        (error as Error).stack,
+      );
+
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to verify order details',
+      });
+    }
+  }
 }
