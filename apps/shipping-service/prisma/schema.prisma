@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model ShippingReceipt {
+  id              String   @id @map("_id") @default(auto()) @db.ObjectId
+
+  orderId         String   @db.ObjectId
+  @@unique([orderId])
+
+  
+  senderName      String
+  senderId        String   
+  senderIdType    String   
+  senderAddress   String
+  senderPhone     String
+
+  
+  recipientName    String
+  recipientId      String   
+  recipientIdType  String   
+  recipientAddress String
+  recipientPhone   String
+
+  
+  carrierName     String?
+  carrierId       String?
+  vehiclePlate    String?
+
+  
+  receiptNumber   String   
+  dispatchDate    DateTime 
+  declaredValue   Float?
+  shippingCost    Float?
+  subtotal        Float?
+  total           Float?
+  remesaNumber    String?  
+
+  
+  items           Item[]
+  
+  
+  digitalSignature String?     
+
+
+  
+  generatedAt      DateTime @default(now())
+  generatedBy      String   
+
+  
+  ownerClientId    String @db.ObjectId 
+
+  @@index([ownerClientId])
+}
+
+model Item {
+  id                String           @id @map("_id") @default(auto()) @db.ObjectId
+  shippingReceiptId String           @db.ObjectId
+  shippingReceipt   ShippingReceipt  @relation(fields: [shippingReceiptId], references: [id], onDelete: Cascade)
+  
+  productName       String
+  quantity          Float
+  weight            Float?
+  unit              String
+  
+  @@index([shippingReceiptId])
+}

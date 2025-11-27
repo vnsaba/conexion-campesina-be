@@ -218,4 +218,44 @@ export class ReviewController {
       }),
     );
   }
+
+  /**
+   * Verifica si el cliente ya tiene una reseña para este producto
+   * y tiene una orden con ese producto para saber si es candidato a hacer una reseña.
+   * @param user Usuario autenticado
+   * @param productOfferId ID de la oferta de producto
+   * @returns true si puede hacer reseña, false si ya la hizo o no ha comprado el producto
+   */
+  @RoleProtected(ValidRoles.CLIENT)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get('has-reviewed/:productOfferId')
+  async hasReviewed(
+    @User() user: CurrentUser,
+    @Param('productOfferId') productOfferId: string,
+  ) {
+    const productOffer = await this.existProductOffer(productOfferId, user.id);
+
+    if (!productOffer) {
+      return false;
+    }
+
+    const clientReviews = await firstValueFrom(
+      this.findReviewsByClientId(user).pipe(
+        catchError((error) => {
+          throw new RpcException({
+            status: error.status || 500,
+            message: error.message || 'Error fetching client reviews',
+          });
+        }),
+      ),
+    );
+
+    const hasReviewedProduct = Array.isArray(clientReviews)
+      ? clientReviews.some(
+          (review: any) => review.productOfferId === productOfferId,
+        )
+      : false;
+
+    return !hasReviewedProduct;
+  }
 }

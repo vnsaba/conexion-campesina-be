@@ -96,7 +96,6 @@ export class ReviewService extends PrismaClient implements OnModuleInit {
         orderBy: { createdAt: 'desc' },
       });
 
-      // Consultar cada cliente al microservicio AUTH
       const usersReviewsPromises = reviewProduct.map((rw) =>
         firstValueFrom(
           this.natsClient.send('auth.get.user', rw.clientId).pipe(
@@ -112,13 +111,11 @@ export class ReviewService extends PrismaClient implements OnModuleInit {
 
       const userReviews = await Promise.all(usersReviewsPromises);
 
-      // Crear mapa de clientes
       const clientMap = new Map<string, string>();
       userReviews.forEach((client: { id: string; fullName: string }) => {
         clientMap.set(client.id, client.fullName);
       });
 
-      // Retornar reviews con nombre del cliente
       return reviewProduct.map((review) => ({
         ...review,
         clientName: clientMap.get(review.clientId) || 'Unknown Client',
