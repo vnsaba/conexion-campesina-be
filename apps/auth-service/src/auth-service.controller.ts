@@ -4,6 +4,7 @@ import { MessagePattern, Payload } from '@nestjs/microservices';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { LoginUserDto } from './dto/login-user.dto';
 import { UpdateClientStatus } from './dto/update-client-status';
+import { UpdateClienInfo } from './dto/update-client-info.dto';
 
 @Controller()
 export class AuthServiceController {
@@ -40,5 +41,10 @@ export class AuthServiceController {
     const { clientId, newStatus } = updateClientStatusDto;
 
     return this.authServiceService.updateClientStatus({ clientId, newStatus });
+  }
+
+  @MessagePattern('auth.update.client.info')
+  updateClientInfo(@Payload() updateClientInfoDto: UpdateClienInfo) {
+    return this.authServiceService.updateUserProfile(updateClientInfoDto);
   }
 }

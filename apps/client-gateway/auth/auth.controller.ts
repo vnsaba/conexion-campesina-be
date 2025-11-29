@@ -18,6 +18,7 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 import { UpdateClientStatus } from './dto/update-client-status';
 import { ValidRoles } from '../auth/enum/valid-roles.enum';
 import { UserRoleGuard } from './guards/user-role.guard';
+import { UpdateClienInfo } from './dto/update-client-info.dto';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -92,6 +93,26 @@ export class AuthController {
       return this.natsClient.send('auth.update.client.status', {
         clientId,
         newStatus: body.newStatus,
+      });
+    } catch (error) {
+      throw new RpcException(error);
+    }
+  }
+
+  /**
+   * Updates only the user's address and fullName.
+   */
+  @RoleProtected(ValidRoles.PRODUCER, ValidRoles.CLIENT)
+  @Post('update-client-info')
+  @UseGuards(AuthGuard, UserRoleGuard)
+  updateClientInfo(
+    @User() user: CurrentUser,
+    @Body() updateData: UpdateClienInfo,
+  ) {
+    try {
+      return this.natsClient.send('auth.update.client.info', {
+        clientId: user.id,
+        ...updateData,
       });
     } catch (error) {
       throw new RpcException(error);
