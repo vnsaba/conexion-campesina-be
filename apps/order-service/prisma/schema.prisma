@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -17,18 +16,20 @@ enum OrderStatus {
 }
 
 model Order {
-  id          String        @id @default(uuid())
-  clientId    String
-  status      OrderStatus   @default(PENDING)
-  totalAmount Float
-  totalItems  Int           @default(0)
-  address     String
-  orderDate   DateTime      @default(now())
-  
+  id              String      @id @default(uuid())
+  clientId        String
+  status          OrderStatus @default(PENDING)
+  totalAmount     Float
+  totalItems      Int         @default(0)
+  address         String
+  orderDate       DateTime    @default(now())
+  paid            Boolean     @default(false)
+  paidAt          DateTime?
+  stripeChargeId  String?
   orderDetails OrderDetails[]
-  
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  orderReceipt OrderReceipt?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("orders")
 }
@@ -40,13 +41,22 @@ model OrderDetails {
   quantity       Int
   price          Float
   subtotal       Float
-  
-  order          Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([orderId])
   @@index([productOfferId])
   @@map("order_details")
+}
+
+model OrderReceipt {
+  id String @id @default(uuid())
+  order Order @relation(fields: [orderId], references: [id])
+  orderId String @unique
+  receiptUrl String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

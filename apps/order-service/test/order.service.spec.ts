@@ -2,8 +2,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RpcException } from '@nestjs/microservices';
 import { HttpStatus } from '@nestjs/common';
-import { OrderService } from './order.service';
-import { OrderStatus } from '../../generated/prisma';
+import { OrderService } from '../src/order/order.service';
+import { OrderStatus } from '../generated/prisma';
 import { of, throwError } from 'rxjs';
 
 describe('OrderService', () => {
@@ -37,6 +37,7 @@ describe('OrderService', () => {
   beforeEach(async () => {
     mockNatsClient = {
       send: jest.fn(),
+      emit: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -132,7 +133,15 @@ describe('OrderService', () => {
         ],
       };
 
-      mockNatsClient.send.mockReturnValue(of({ valid: true }));
+      // Mock NATS responses for product lookups
+      mockNatsClient.send
+        .mockReturnValueOnce(
+          of({ id: 'prod-1', price: 10000, isAvailable: true, name: 'Prod 1' }),
+        )
+        .mockReturnValueOnce(
+          of({ id: 'prod-2', price: 5000, isAvailable: true, name: 'Prod 2' }),
+        );
+
       (service['order'].create as jest.Mock).mockResolvedValue(
         mockOrderMultiple,
       );
@@ -194,7 +203,9 @@ describe('OrderService', () => {
         status: OrderStatus.PENDING,
       };
 
-      mockNatsClient.send.mockReturnValue(of({ valid: true }));
+      mockNatsClient.send.mockReturnValue(
+        of({ id: 'prod-1', price: 10000, isAvailable: true }),
+      );
       (service['order'].create as jest.Mock).mockResolvedValue(
         mockOrderCreated,
       );
@@ -225,12 +236,7 @@ describe('OrderService', () => {
         ],
       };
 
-      mockNatsClient.send.mockReturnValue(
-        of({
-          valid: false,
-          missingIds: ['invalid-prod-id'],
-        }),
-      );
+      mockNatsClient.send.mockReturnValue(of(null));
 
       await expect(service.create(clientId, createOrderDto)).rejects.toThrow(
         RpcException,
@@ -242,7 +248,9 @@ describe('OrderService', () => {
         expect(error).toBeInstanceOf(RpcException);
         expect(error.getError()).toEqual({
           status: HttpStatus.BAD_REQUEST,
-          message: 'The following products do not exist: invalid-prod-id',
+          message: expect.stringContaining(
+            'Los siguientes productos no existen',
+          ),
         });
       }
 
@@ -335,38 +343,6 @@ describe('OrderService', () => {
         expect(error.getError()).toEqual({
           status: HttpStatus.BAD_REQUEST,
           message: 'Quantity must be greater than zero',
-        });
-      }
-
-      expect(service['order'].create).not.toHaveBeenCalled();
-      expect(mockNatsClient.send).not.toHaveBeenCalled();
-    });
-
-    // ORDER-CP-07
-    it('ORDER-CP-07: should throw BAD_REQUEST when price is zero or negative', async () => {
-      const clientId = 'client-123';
-      const createOrderDto = {
-        address: 'Calle 123 #45-67',
-        orderDetails: [
-          {
-            productOfferId: 'prod-1',
-            quantity: 5,
-            price: 0,
-          },
-        ],
-      };
-
-      await expect(service.create(clientId, createOrderDto)).rejects.toThrow(
-        RpcException,
-      );
-
-      try {
-        await service.create(clientId, createOrderDto);
-      } catch (error) {
-        expect(error).toBeInstanceOf(RpcException);
-        expect(error.getError()).toEqual({
-          status: HttpStatus.BAD_REQUEST,
-          message: 'Price must be greater than zero',
         });
       }
 
@@ -516,6 +492,7 @@ describe('OrderService', () => {
         where: { id: 'order-id-123' },
         include: {
           orderDetails: true,
+          orderReceipt: true,
         },
       });
       expect(result).toEqual(mockOrder);

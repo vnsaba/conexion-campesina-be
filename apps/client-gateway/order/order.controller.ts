@@ -114,4 +114,15 @@ export class OrderController {
       }),
     );
   }
+
+  @RoleProtected(ValidRoles.CLIENT, ValidRoles.PRODUCER)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get(':orderId/retry-payment')
+  retryPayment(@Param('orderId') orderId: string) {
+    return this.natsClient.send('order.retryPayment', orderId).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
+  }
 }
