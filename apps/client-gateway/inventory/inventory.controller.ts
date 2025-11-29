@@ -12,12 +12,16 @@ import {
 import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { AuthGuard } from 'apps/client-gateway/auth/guards/auth.guards';
 import { UserRoleGuard } from 'apps/client-gateway/auth/guards/user-role.guard';
-import { RoleProtected } from 'apps/client-gateway/auth/guards/decorators';
+import {
+  RoleProtected,
+  User,
+} from 'apps/client-gateway/auth/guards/decorators';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { CreateInventoryDto } from 'apps/inventory-service/src/dto/create-inventory.dto';
 import { ValidRoles } from '../auth/enum/valid-roles.enum';
 import { catchError } from 'rxjs';
 import { UpdateInventoryDto } from 'apps/inventory-service/src/dto/update-inventory.dto';
+import { CurrentUser } from '../auth/guards/interface/current-user.interface';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
 
@@ -35,9 +39,13 @@ export class InventoryController {
   @RoleProtected(ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Post('')
-  createInventory(@Body() createInventoryDto: CreateInventoryDto) {
+  createInventory(
+    @Body() createInventoryDto: CreateInventoryDto,
+    @User() user: CurrentUser,
+  ) {
     return this.natsClient
       .send('inventory.create', {
+        producerId: user.id,
         createInventoryDto,
       })
       .pipe(
@@ -63,9 +71,9 @@ export class InventoryController {
 
   @RoleProtected(ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
-  @Get('/producer/:producerId')
-  findByProducer(@Param('producerId') producerId: string) {
-    return this.natsClient.send('inventory.findAll', producerId).pipe(
+  @Get('/producer')
+  findByProducer(@User() user: CurrentUser) {
+    return this.natsClient.send('inventory.findAll', user.id).pipe(
       catchError((error) => {
         throw new RpcException(error);
       }),

@@ -17,6 +17,8 @@ import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { firstValueFrom } from 'rxjs';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { catchError, of } from 'rxjs';
+import { OrderWithProducts } from './interfaces/order-with-product.interface';
+import { PaidOrderDto } from './dto/paid-order.dto';
 
 @Injectable()
 export class OrderService extends PrismaClient implements OnModuleInit {
@@ -51,67 +53,84 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   async create(clientId: string, createOrderDto: CreateOrderDto) {
     const { address, orderDetails } = createOrderDto;
 
-    try {
-      if (!orderDetails || orderDetails.length === 0) {
-        throw new RpcException({
-          status: HttpStatus.BAD_REQUEST,
-          message: 'Order must contain at least one product',
-        });
-      }
+    if (!orderDetails || orderDetails.length === 0) {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: 'Order must contain at least one product',
+      });
+    }
 
-      for (const detail of orderDetails) {
+    try {
+      // 1. Obtener los IDs de los productos solicitados
+      const productOfferIds = orderDetails.map((detail) => {
         if (detail.quantity <= 0) {
           throw new RpcException({
             status: HttpStatus.BAD_REQUEST,
             message: 'Quantity must be greater than zero',
           });
         }
+        return detail.productOfferId;
+      });
 
-        if (detail.price <= 0) {
-          throw new RpcException({
-            status: HttpStatus.BAD_REQUEST,
-            message: 'Price must be greater than zero',
-          });
-        }
-      }
-
-      const productOfferIds = orderDetails.map(
-        (detail) => detail.productOfferId,
+      // 2. Traer la información REAL de los productos desde el Microservicio de Catálogo
+      const products: any[] = await Promise.all(
+        productOfferIds.map((id) =>
+          firstValueFrom(
+            this.natsClient.send('product.offer.findOne', id).pipe(
+              catchError(() => {
+                this.logger.warn(`Producto no encontrado: ${id}`);
+                return of(null);
+              }),
+            ),
+          ),
+        ),
       );
 
-      const validation = await firstValueFrom(
-        this.natsClient.send('product.offer.validateMany', productOfferIds),
-      );
+      // 3. Validar que todos los productos existan
+      // Si alguno es null, significa que no existe en el catálogo
+      const missingProducts = products
+        .map((p, index) => (p ? null : productOfferIds[index]))
+        .filter((id) => id !== null);
 
-      if (!validation.valid) {
+      if (missingProducts.length > 0) {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
-          message: `The following products do not exist: ${validation.missingIds.join(', ')}`,
+          message: `Los siguientes productos no existen o no están disponibles: ${missingProducts.join(', ')}`,
         });
       }
 
+      const unavailableProducts = products.filter((p) => !p.isAvailable);
+      if (unavailableProducts.length > 0) {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: `Los siguientes productos no están disponibles para venta: ${unavailableProducts.map((p) => p.name).join(', ')}`,
+        });
+      }
+
+      // 5. Calcular totales usando el PRECIO REAL (de la BD, no del usuario)
       let totalAmount = 0;
       let totalItems = 0;
-      const processedOrderDetails: Array<{
-        productOfferId: string;
-        quantity: number;
-        price: number;
-        subtotal: number;
-      }> = [];
 
-      for (const detail of orderDetails) {
-        const subtotal = detail.quantity * detail.price;
+      const processedOrderDetails = orderDetails.map((detail) => {
+        // Buscamos el producto real correspondiente a este detalle
+        const product = products.find((p) => p.id === detail.productOfferId);
+
+        // Aquí tomamos el precio real
+        const realPrice = product.price;
+        const subtotal = detail.quantity * realPrice;
+
         totalAmount += subtotal;
         totalItems += detail.quantity;
 
-        processedOrderDetails.push({
+        return {
           productOfferId: detail.productOfferId,
           quantity: detail.quantity,
-          price: detail.price,
+          price: realPrice, // Guardamos el precio histórico real
           subtotal: subtotal,
-        });
-      }
+        };
+      });
 
+      // 6. Guardar la orden en la Base de Datos
       const order = await this.order.create({
         data: {
           clientId,
@@ -127,7 +146,10 @@ export class OrderService extends PrismaClient implements OnModuleInit {
           orderDetails: true,
         },
       });
+
+      // 7. Publicar eventos
       this.publishOrderPendingEvents(order.orderDetails);
+
       return order;
     } catch (error) {
       if (error instanceof RpcException) {
@@ -141,6 +163,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       });
     }
   }
+
   private publishOrderPendingEvents(orderDetails: OrderDetails[]) {
     for (const detail of orderDetails) {
       const data = {
@@ -210,6 +233,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         where: { id },
         include: {
           orderDetails: true,
+          orderReceipt: true,
         },
       });
 
@@ -453,23 +477,25 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   async updateStatus(updateStatus: UpdateOrderStatusDto) {
-    try {
-      const { orderId, status } = updateStatus;
+    //1. busca la orden
+    const { orderId, status } = updateStatus;
+    const existingOrder = await this.findOne(orderId);
 
-      const existingOrder = await this.findOne(orderId);
-
-      const updatedOrder = await this.order.update({
-        where: { id: existingOrder.id },
-        data: { status },
-        include: { orderDetails: true },
-      });
-      this.publishOrderStatusEvents(status, updatedOrder.orderDetails);
-      return updatedOrder;
-    } catch (error) {
-      if (error instanceof RpcException) {
-        throw error;
-      }
+    if (existingOrder.status === status) {
+      return existingOrder; // No hacer nada si el estado es el mismo
     }
+
+    // 2. Actualizas en Base de Datos
+    const updatedOrder = await this.order.update({
+      where: { id: orderId },
+      data: { status },
+      include: { orderDetails: true },
+    });
+
+    // 3. Avisas a los otros microservicios (Inventario)
+    this.publishOrderStatusEvents(status, updatedOrder.orderDetails);
+
+    return updatedOrder;
   }
 
   private publishOrderStatusEvents(
@@ -477,15 +503,101 @@ export class OrderService extends PrismaClient implements OnModuleInit {
     orderDetails: OrderDetails[],
   ) {
     const detailEventMap = {
-      PAID: 'order.confirmed',
       CANCELLED: 'order.cancelled',
     };
     const eventName = detailEventMap[status];
+
+    if (!eventName) {
+      return;
+    }
+
     for (const detail of orderDetails) {
       this.natsClient.emit(eventName, {
         productOfferId: detail.productOfferId,
         quantity: detail.quantity,
       });
     }
+  }
+
+  async createPaymentSession(order: OrderWithProducts) {
+    // Usa el tipo correcto OrderWithProducts
+    // 1. Obtenemos los nombres de los productos correctamente usando Promise.all
+    const items = await Promise.all(
+      order.orderDetails.map(async (item) => {
+        const productName = await firstValueFrom(
+          this.natsClient.send('product.offer.getName', item.productOfferId),
+        );
+        return {
+          name: productName || 'Producto sin nombre',
+          price: item.price,
+          quantity: item.quantity,
+        };
+      }),
+    );
+
+    // 2. Enviamos a Payment Service
+    const paymentSession = await firstValueFrom(
+      this.natsClient.send('create.payment.session', {
+        orderId: order.id,
+        currency: 'COP',
+        items: items,
+      }),
+    );
+
+    return paymentSession;
+  }
+
+  async paidOrder(paidOrderDto: PaidOrderDto) {
+    this.logger.log(`Procesando pago para orden: ${paidOrderDto.orderId}`);
+
+    const updatedOrder = await this.order.update({
+      where: { id: paidOrderDto.orderId },
+      data: {
+        status: 'PAID',
+        paid: true,
+        paidAt: new Date(),
+        stripeChargeId: paidOrderDto.stripePaymentId,
+        orderReceipt: {
+          create: {
+            receiptUrl: paidOrderDto.receiptUrl,
+          },
+        },
+      },
+      include: {
+        orderDetails: true,
+      },
+    });
+
+    // 2. Avisar al inventario (usando los detalles que ya trajimos)
+    this.publishOrderStatusEvents('PAID', updatedOrder.orderDetails);
+
+    this.logger.log(
+      `Orden ${updatedOrder.id} actualizada a PAID y notificada a inventario`,
+    );
+  }
+
+  /**
+   * Regenera la sesión de pago para una orden existente.
+   */
+  async retryPayment(orderId: string) {
+    const order = await this.findOne(orderId);
+
+    if (order.status === 'PAID') {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: 'Order is already paid',
+      });
+    }
+
+    if (order.status === 'CANCELLED') {
+      throw new RpcException({
+        status: HttpStatus.BAD_REQUEST,
+        message: 'Order is cancelled',
+      });
+    }
+
+    const paymentSession = await this.createPaymentSession(order);
+
+    return paymentSession;
   }
 }

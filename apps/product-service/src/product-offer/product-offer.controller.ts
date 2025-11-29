@@ -77,4 +77,9 @@ export class ProductOfferController {
       payload.available,
     );
   }
+
+  @EventPattern('product.offer.getName')
+  getName(@Payload() productOfferId: string) {
+    return this.productOfferService.getName(productOfferId);
+  }
 }

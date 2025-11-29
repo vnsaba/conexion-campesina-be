@@ -11,8 +11,15 @@ export class InventoryServiceController {
 
   // Crear un nuevo inventario
   @MessagePattern('inventory.create')
-  create(@Payload() createInventoryDto: CreateInventoryDto) {
-    return this.inventoryService.create(createInventoryDto);
+  create(
+    @Payload()
+    paylaod: {
+      producerId: string;
+      createInventoryDto: CreateInventoryDto;
+    },
+  ) {
+    const { producerId, createInventoryDto } = paylaod;
+    return this.inventoryService.create(producerId, createInventoryDto);
   }
 
   // Obtener todos los inventarios

@@ -411,4 +411,31 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       );
     }
   }
+
+  async getName(productOfferId: string) {
+    try {
+      const productOffer = await this.productOffer.findUnique({
+        where: { id: productOfferId },
+        select: { name: true },
+      });
+
+      if (!productOffer) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: `ProductOffer with id '${productOfferId}' not found`,
+        });
+      }
+
+      return productOffer.name;
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+
+      RpcError.handle(
+        this.logger,
+        'ProductOfferService',
+        error,
+        'Failed to get product offer name',
+      );
+    }
+  }
 }

@@ -337,9 +337,7 @@ describe('ReviewService', () => {
     it('should throw RpcException when review not found (FAIL - NOT_FOUND)', async () => {
       jest.spyOn(service.review, 'findUnique').mockResolvedValue(null);
 
-      await expect(service.findOne(mockReviewId)).rejects.toThrow(
-        RpcException,
-      );
+      await expect(service.findOne(mockReviewId)).rejects.toThrow(RpcException);
 
       try {
         await service.findOne(mockReviewId);
@@ -499,9 +497,9 @@ describe('ReviewService', () => {
     it('should fail when review not found for client (FAIL - NOT_FOUND)', async () => {
       jest.spyOn(service.review, 'findFirst').mockResolvedValue(null);
 
-      await expect(
-        service.remove(mockReviewId, mockClientId),
-      ).rejects.toThrow(RpcException);
+      await expect(service.remove(mockReviewId, mockClientId)).rejects.toThrow(
+        RpcException,
+      );
 
       try {
         await service.remove(mockReviewId, mockClientId);

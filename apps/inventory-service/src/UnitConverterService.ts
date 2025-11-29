@@ -1,28 +1,34 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { create, all } from 'mathjs';
 
+// Mapeo: Llave (Tu Enum Prisma) -> Valor (Unidad MathJS)
 const UNIT_MAP: Record<string, string> = {
-  Kg: 'Kg',
-  g: 'g',
-  L: 'L',
-  mL: 'mL',
-  t: 't',
-  lb: 'lb',
-  arroba: 'Arroba',
-  Carga: 'Carga',
-  Bulto: 'Bulto',
-  Saco: 'Saco',
-  Caja: 'Caja',
-  Canasta: 'Canasta',
-  Atado: 'Atado',
-  Manojo: 'Manojo',
-  Racimo: 'Racimo',
-  Unidad: 'Unidad',
-  Docena: 'Docena',
-  Media_docena: 'MediaDocena', // 🔥 FIX
-  Par: 'Par',
-  Cuartilla: 'Cuartilla',
-  Botella: 'Botella',
+  // Masa
+  KILOGRAMO: 'kg',
+  GRAMO: 'g',
+  TONELADA: 'tonne',
+  LIBRA: 'lb',
+  ARROBA: 'Arroba', // Custom
+  CARGA: 'Carga', // Custom
+  BULTO: 'Bulto', // Custom
+  SACO: 'Saco', // Custom
+
+  // Volumen
+  LITRO: 'l',
+  MILILITRO: 'ml',
+  BOTELLA: 'Botella', // Custom
+  CUARTILLA: 'Cuartilla', // Custom
+
+  // Conteo (Unidades)
+  UNIDAD: 'Unidad', // Custom base
+  DOCENA: 'Docena',
+  MEDIA_DOCENA: 'MediaDocena',
+  PAR: 'Par',
+  MANOJO: 'Manojo',
+  ATADO: 'Atado',
+  RACIMO: 'Racimo',
+  CAJA: 'Caja',
+  CANASTA: 'Canasta',
 };
 
 @Injectable()
@@ -31,55 +37,60 @@ export class UnitConverterService {
   private unitCategories = new Map<string, string>();
 
   constructor() {
-    // MASS
-    this.safeRegisterMassUnit('Kg');
-    this.safeRegisterMassUnit('g', '0.001 Kg');
-    this.safeRegisterMassUnit('t', '1000 Kg');
-    this.safeRegisterMassUnit('lb', '0.453592 Kg');
-    this.safeRegisterMassUnit('arroba', '12.5 Kg');
-    this.safeRegisterMassUnit('Carga', '125 Kg');
-    this.safeRegisterMassUnit('Bulto', '50 Kg');
-    this.safeRegisterMassUnit('Saco', '50 Kg');
+    // === MASA (Base: kg) ===
+    this.safeRegisterMassUnit('KILOGRAMO');
+    this.safeRegisterMassUnit('GRAMO');
+    this.safeRegisterMassUnit('TONELADA');
+    this.safeRegisterMassUnit('LIBRA');
 
-    // VOLUME
-    this.safeRegisterVolumeUnit('L');
-    this.safeRegisterVolumeUnit('mL', '0.001 L');
-    this.safeRegisterVolumeUnit('Botella', '0.75 L');
-    this.safeRegisterVolumeUnit('Cuartilla', '0.25 L');
+    // Definiciones Custom de Masa
+    this.safeRegisterMassUnit('ARROBA', '12.5 kg');
+    this.safeRegisterMassUnit('CARGA', '125 kg');
+    this.safeRegisterMassUnit('BULTO', '50 kg');
+    this.safeRegisterMassUnit('SACO', '50 kg');
 
-    // COUNT
-    this.safeRegisterCountUnit('Unidad');
-    this.safeRegisterCountUnit('Docena', '12 Unidad');
-    this.safeRegisterCountUnit('Media_docena', '12 Unidad'); // 🔥 fix: valid name inside map
-    this.safeRegisterCountUnit('Par', '2 Unidad');
-    this.safeRegisterCountUnit('Manojo');
-    this.safeRegisterCountUnit('Atado');
-    this.safeRegisterCountUnit('Racimo');
-    this.safeRegisterCountUnit('Caja');
-    this.safeRegisterCountUnit('Canasta');
+    // === VOLUMEN (Base: l) ===
+    this.safeRegisterVolumeUnit('LITRO');
+    this.safeRegisterVolumeUnit('MILILITRO');
+
+    // Definiciones Custom de Volumen
+    this.safeRegisterVolumeUnit('BOTELLA', '0.75 l');
+    this.safeRegisterVolumeUnit('CUARTILLA', '0.25 l');
+
+    // === CONTEO (Base: Unidad) ===
+    this.math.createUnit('Unidad', { aliases: ['unidad', 'u'] });
+    this.unitCategories.set('UNIDAD', 'count');
+
+    this.safeRegisterCountUnit('DOCENA', '12 Unidad');
+    this.safeRegisterCountUnit('MEDIA_DOCENA', '6 Unidad');
+    this.safeRegisterCountUnit('PAR', '2 Unidad');
+
+    this.safeRegisterCountUnit('MANOJO', '1 Unidad');
+    this.safeRegisterCountUnit('ATADO', '1 Unidad');
+    this.safeRegisterCountUnit('RACIMO', '1 Unidad');
+    this.safeRegisterCountUnit('CAJA', '1 Unidad');
+    this.safeRegisterCountUnit('CANASTA', '1 Unidad');
   }
 
   /** Registers a unit safely for mathjs */
   private safeRegister(category: string, prismaUnit: string, def?: string) {
     const mathUnit = UNIT_MAP[prismaUnit];
     if (!mathUnit) {
-      throw new Error(`Unit '${prismaUnit}' has no mathjs mapping in UNIT_MAP`);
+      console.warn(`Unit '${prismaUnit}' missing in UNIT_MAP`);
+      return;
     }
 
     try {
       if (def) {
-        this.math.createUnit(mathUnit, { definition: def });
-      } else {
+        this.math.createUnit(mathUnit, { definition: def }, { override: true });
+      } else if (!this.math.unit(mathUnit).toJSON()) {
         this.math.createUnit(mathUnit);
       }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {
-      // Ignore duplicated units
-      if (!String(e).includes('already exists')) {
-        throw e;
-      }
+      /* empty */
     }
 
-    // Store category using Prisma's original name
     this.unitCategories.set(prismaUnit, category);
   }
 
@@ -95,7 +106,11 @@ export class UnitConverterService {
     this.safeRegister('count', unit, def);
   }
 
-  /** Converts using Prisma names but mathjs uses mapped names */
+  /** * Convierte valores.
+   * @param value Cantidad a convertir (ej. 500)
+   * @param from Unidad origen en Enum Prisma (ej. "GRAMO")
+   * @param to Unidad destino en Enum Prisma (ej. "KILOGRAMO")
+   */
   convert(value: number, from: string, to: string): number {
     if (from === to) return value;
 
@@ -104,13 +119,13 @@ export class UnitConverterService {
 
     if (!catFrom || !catTo) {
       throw new BadRequestException(
-        `Unidades no registradas en el sistema: ${from} o ${to}`,
+        `Unidades no registradas en el sistema de conversión: '${from}' o '${to}'`,
       );
     }
 
     if (catFrom !== catTo) {
       throw new BadRequestException(
-        `No se puede convertir entre categorías diferentes: ${from} (${catFrom}) → ${to} (${catTo})`,
+        `Incompatible: No se puede convertir ${from} (${catFrom}) a ${to} (${catTo})`,
       );
     }
 
@@ -118,10 +133,10 @@ export class UnitConverterService {
     const toMath = UNIT_MAP[to];
 
     try {
-      return this.math.unit(`${value} ${fromMath}`).toNumber(toMath);
+      return this.math.unit(value, fromMath).toNumber(toMath);
     } catch (e) {
       throw new BadRequestException(
-        `Error convirtiendo ${value} ${from} → ${to}: ${e}`,
+        `Error matemático al convertir ${value} ${from} a ${to}: ${e.message}`,
       );
     }
   }

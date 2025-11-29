@@ -8,7 +8,9 @@ export class UpdateOrderStatusDto {
 
   @IsNotEmpty()
   @IsEnum(OrderStatus, {
-    message: 'El estado debe ser uno de los ya definidos',
+    message:
+      'the status must be one of the following values: ' +
+      Object.values(OrderStatus).join(', '),
   })
   status: OrderStatus;
 }

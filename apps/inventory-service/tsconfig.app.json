@@ -1,4 +1,3 @@
-<<<<<<<< HEAD:apps/inventory-service/tsconfig.app.json
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
@@ -8,14 +7,3 @@
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }
-========
-{
-  "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "declaration": false,
-    "outDir": "../../dist/apps/review-service"
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
-}
->>>>>>>> c2d4a575fe3bf2bce9471803b03970277a3654cd:apps/review-service/tsconfig.app.json

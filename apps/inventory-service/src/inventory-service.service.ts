@@ -8,16 +8,13 @@ import { OrderPendingDto } from './dto/order-pending.dto';
 import { UnitConverterService } from './UnitConverterService';
 import { RpcError } from '../../../libs/helpers/rcp-error.helpers';
 import { PrismaService } from '../provider/prisma.service';
-// import { RpcException } from '@nestjs/microservices';
-
-const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY ?? 'NATS_SERVICE';
 
 @Injectable()
 export class InventoryService {
   private readonly logger = new Logger(InventoryService.name);
 
   constructor(
-    @Inject(NATS_SERVICE_KEY) private readonly natsClient: ClientProxy,
+    @Inject('NATS_SERVICE') private readonly natsClient: ClientProxy,
     private readonly prisma: PrismaService,
     private readonly unitConverter: UnitConverterService,
   ) {}
@@ -32,13 +29,12 @@ export class InventoryService {
    * @returns El registro de inventario creado
    * @throws RpcError si las validaciones fallan o la operación de BD falla
    */
-  async create(createInventory: CreateInventoryDto) {
+  async create(producerId: string, createInventory: CreateInventoryDto) {
     try {
       const {
         productOfferId,
         available_quantity,
         unit,
-        producerId,
         minimum_threshold,
         maximum_capacity,
       } = createInventory;
@@ -56,9 +52,8 @@ export class InventoryService {
         );
       }
 
-      const producer = await firstValueFrom(
-        this.natsClient.send('auth.get.user', producerId),
-      );
+      this.logger.log('producerId: ' + producerId);
+      const producer = this.natsClient.send('auth.get.user', producerId);
 
       if (!producer) {
         throw RpcError.notFound(`Producer with id '${producerId}' not found`);
@@ -342,8 +337,12 @@ export class InventoryService {
       );
 
       if (!inventory || !productOffer) return;
+
+      // 1. CORRECCIÓN: Calcular Total Real (Cantidad Orden * Cantidad Unitaria de Oferta)
+      const totalQuantity = quantity * productOffer.quantity;
+
       const unitEquivalent = this.unitConverter.convert(
-        quantity,
+        totalQuantity, // Usamos el total real
         productOffer.unit,
         inventory.unit,
       );
@@ -357,12 +356,8 @@ export class InventoryService {
       const updatedInventory = await this.prisma.inventory.update({
         where: { id: inventory.id },
         data: {
-          reserved_quantity: {
-            decrement: unitEquivalent,
-          },
-          available_quantity: {
-            decrement: unitEquivalent,
-          },
+          reserved_quantity: { decrement: unitEquivalent },
+          available_quantity: { decrement: unitEquivalent },
         },
       });
 
@@ -375,7 +370,6 @@ export class InventoryService {
       );
     }
   }
-
   /**
    * [Manejador de Evento] Reacciona al evento 'order.cancelled'.
    * Libera el stock que estaba reservado.
@@ -389,6 +383,7 @@ export class InventoryService {
    * @returns void
    * @note Atrapa errores internamente (log) y NO relanza la excepción.
    */
+
   async handleOrderCancelled(productOfferId: string, quantity: number) {
     try {
       const inventory = await this.findByProductOffer(productOfferId);
@@ -397,8 +392,11 @@ export class InventoryService {
       );
       if (!inventory || !productOffer) return;
 
+      // 1. CORRECCIÓN: Calcular Total Real
+      const totalQuantity = quantity * productOffer.quantity;
+
       const unitEquivalent = this.unitConverter.convert(
-        quantity,
+        totalQuantity,
         productOffer.unit,
         inventory.unit,
       );
@@ -435,8 +433,11 @@ export class InventoryService {
       );
       if (!inventory || !productOffer) return;
 
+      // 1. CORRECCIÓN: Calcular Total Real
+      const totalQuantity = data.quantity * productOffer.quantity;
+
       const unitEquivalent = this.unitConverter.convert(
-        data.quantity,
+        totalQuantity,
         productOffer.unit,
         inventory.unit,
       );
@@ -456,9 +457,7 @@ export class InventoryService {
       await this.prisma.inventory.update({
         where: { id: inventory.id },
         data: {
-          reserved_quantity: {
-            increment: unitEquivalent,
-          },
+          reserved_quantity: { increment: unitEquivalent },
         },
       });
     } catch (error) {

@@ -62,8 +62,8 @@ describe('InventoryService - create()', () => {
     jest.clearAllMocks();
   });
   it('should create inventory when all validations pass', async () => {
+    const producerId = 'prod-1';
     const dto = {
-      producerId: 'prod-1',
       productOfferId: 'offer-1',
       available_quantity: 10,
       unit: Unit.KILOGRAMO,
@@ -78,14 +78,14 @@ describe('InventoryService - create()', () => {
     mockInventory.findFirst.mockResolvedValue(null);
     mockInventory.create.mockResolvedValue({ id: 'inv-1', ...dto });
 
-    const result = await service.create(dto);
+    const result = await service.create(producerId, dto);
 
     expect(result).toEqual({ id: 'inv-1', ...dto });
   });
 
   it('should fail if producerId is empty', async () => {
+    const producerId = '';
     const dto = {
-      producerId: '',
       productOfferId: 'offer-1',
       available_quantity: 1,
       unit: Unit.KILOGRAMO,
@@ -95,12 +95,12 @@ describe('InventoryService - create()', () => {
 
     mockNatsClient.send.mockReturnValue(of(null)); // productor no existe
 
-    await expect(service.create(dto)).rejects.toThrow(RpcException);
+    await expect(service.create(producerId, dto)).rejects.toThrow(RpcException);
   });
 
   it('should fail if producer does not exist', async () => {
+    const producerId = 'bad';
     const dto = {
-      producerId: 'bad',
       productOfferId: 'offer-1',
       available_quantity: 1,
       unit: Unit.KILOGRAMO,
@@ -110,12 +110,12 @@ describe('InventoryService - create()', () => {
 
     mockNatsClient.send.mockReturnValueOnce(of(null)); // productor no encontrado
 
-    await expect(service.create(dto)).rejects.toThrow(RpcException);
+    await expect(service.create(producerId, dto)).rejects.toThrow(RpcException);
   });
 
   it('should fail if productOfferId does not exist', async () => {
+    const producerId = 'prod-1';
     const dto = {
-      producerId: 'prod-1',
       productOfferId: 'bad',
       available_quantity: 1,
       unit: Unit.KILOGRAMO,
@@ -127,12 +127,12 @@ describe('InventoryService - create()', () => {
       .mockReturnValueOnce(of({ id: 'prod-1' }))
       .mockReturnValueOnce(of(null));
 
-    await expect(service.create(dto)).rejects.toThrow(RpcException);
+    await expect(service.create(producerId, dto)).rejects.toThrow(RpcException);
   });
 
   it('should fail if inventory already exists for the producer + productOffer', async () => {
+    const producerId = 'prod-1';
     const dto = {
-      producerId: 'prod-1',
       productOfferId: 'offer-1',
       available_quantity: 1,
       unit: Unit.KILOGRAMO,
@@ -146,12 +146,12 @@ describe('InventoryService - create()', () => {
 
     mockInventory.findFirst.mockResolvedValue({ id: 'existing' });
 
-    await expect(service.create(dto)).rejects.toThrow(RpcException);
+    await expect(service.create(producerId, dto)).rejects.toThrow(RpcException);
   });
 
   it('should fail if unit is not in enum Unit', async () => {
+    const producerId = 'prod-1';
     const dto: any = {
-      producerId: 'prod-1',
       productOfferId: 'offer-1',
       available_quantity: 1,
       unit: 'LATA',
@@ -162,12 +162,12 @@ describe('InventoryService - create()', () => {
     mockNatsClient.send.mockReturnValue(of({ id: 'prod-1' }));
     mockNatsClient.send.mockReturnValueOnce(of({ id: 'offer-1' }));
 
-    await expect(service.create(dto)).rejects.toThrow();
+    await expect(service.create(producerId, dto)).rejects.toThrow();
   });
 
   it('should fail if available_quantity is negative', async () => {
+    const producerId = 'prod-1';
     const dto = {
-      producerId: 'prod-1',
       productOfferId: 'offer-1',
       available_quantity: -5,
       unit: Unit.KILOGRAMO,
@@ -175,12 +175,12 @@ describe('InventoryService - create()', () => {
       maximum_capacity: 10,
     };
 
-    await expect(service.create(dto)).rejects.toThrow();
+    await expect(service.create(producerId, dto)).rejects.toThrow();
   });
 
   it('should fail if maximum_capacity is 0', async () => {
+    const producerId = 'prod-1';
     const dto = {
-      producerId: 'prod-1',
       productOfferId: 'offer-1',
       available_quantity: 1,
       unit: Unit.KILOGRAMO,
@@ -188,12 +188,12 @@ describe('InventoryService - create()', () => {
       maximum_capacity: 0,
     };
 
-    await expect(service.create(dto)).rejects.toThrow();
+    await expect(service.create(producerId, dto)).rejects.toThrow();
   });
 
   it('should allow available_quantity = 0', async () => {
+    const producerId = 'prod-1';
     const dto = {
-      producerId: 'prod-1',
       productOfferId: 'offer-1',
       available_quantity: 0,
       unit: Unit.KILOGRAMO,
@@ -206,13 +206,13 @@ describe('InventoryService - create()', () => {
     mockInventory.findFirst.mockResolvedValue(null);
     mockInventory.create.mockResolvedValue({ id: 'inv', ...dto });
 
-    const result = await service.create(dto);
+    const result = await service.create(producerId, dto);
     expect(result).toBeDefined();
   });
 
   it('should reject available_quantity = -0.01', async () => {
+    const producerId = 'prod-1';
     const dto = {
-      producerId: 'prod-1',
       productOfferId: 'offer-1',
       available_quantity: -0.01,
       unit: Unit.KILOGRAMO,
@@ -220,12 +220,12 @@ describe('InventoryService - create()', () => {
       maximum_capacity: 10,
     };
 
-    await expect(service.create(dto)).rejects.toThrow();
+    await expect(service.create(producerId, dto)).rejects.toThrow();
   });
 
   it('should allow maximum_capacity = 1', async () => {
+    const producerId = 'prod-1';
     const dto = {
-      producerId: 'prod-1',
       productOfferId: 'offer-1',
       available_quantity: 1,
       unit: Unit.KILOGRAMO,
@@ -238,13 +238,13 @@ describe('InventoryService - create()', () => {
     mockInventory.findFirst.mockResolvedValue(null);
     mockInventory.create.mockResolvedValue({ id: 'inv', ...dto });
 
-    const result = await service.create(dto);
+    const result = await service.create(producerId, dto);
     expect(result).toBeDefined();
   });
 
   it('should reject maximum_capacity = 0.99', async () => {
+    const producerId = 'prod-1';
     const dto = {
-      producerId: 'prod-1',
       productOfferId: 'offer-1',
       available_quantity: 5,
       unit: Unit.KILOGRAMO,
@@ -252,7 +252,7 @@ describe('InventoryService - create()', () => {
       maximum_capacity: 0.99,
     };
 
-    await expect(service.create(dto)).rejects.toThrow();
+    await expect(service.create(producerId, dto)).rejects.toThrow();
   });
 
   it('should reserve stock when inventory and productOffer exist', async () => {
