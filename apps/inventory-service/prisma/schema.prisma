@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("INVENTORY_MS_DATABASE_URL")
+}
+
+enum Unit {
+  KILOGRAMO   @map("Kg")
+  GRAMO       @map("g")
+  LITRO       @map("L")
+  MILILITRO   @map("mL")
+  TONELADA    @map("t")
+  LIBRA       @map("lb")
+  ARROBA      @map("arroba")
+  CARGA       @map("Carga")
+  BULTO       @map("Bulto")
+  SACO        @map("Saco")
+  CAJA        @map("Caja")
+  CANASTA     @map("Canasta")
+  ATADO       @map("Atado")
+  MANOJO      @map("Manojo")
+  RACIMO      @map("Racimo")
+  UNIDAD      @map("Unidad")
+  DOCENA      @map("Docena")
+  MEDIA_DOCENA @map("Media_docena")
+  PAR         @map("Par")
+  CUARTILLA   @map("Cuartilla")
+  BOTELLA     @map("Botella")
+}
+
+model Inventory {
+  id                 String   @id @default(uuid())
+  producerId         String
+  productOfferId     String   
+  available_quantity Float
+  unit               Unit
+  minimum_threshold  Float   @default(0)
+  reserved_quantity  Float   @default(0)
+  maximum_capacity   Float?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

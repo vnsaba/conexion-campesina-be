@@ -1,15 +1,16 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
+import { PaidOrderDto } from './dto/paid-order.dto';
 
 @Controller()
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @MessagePattern('order.create')
-  create(
+  async create(
     @Payload()
     payload: {
       clientId: string;
@@ -17,7 +18,11 @@ export class OrderController {
     },
   ) {
     const { clientId, createOrderDto } = payload;
-    return this.orderService.create(clientId, createOrderDto);
+
+    const order = await this.orderService.create(clientId, createOrderDto);
+    const paymentSession = await this.orderService.createPaymentSession(order);
+
+    return { order, paymentSession };
   }
 
   @MessagePattern('order.findAll')
@@ -53,6 +58,21 @@ export class OrderController {
   @MessagePattern('order.existsProductOffer')
   existsProductOffer(@Payload() productOfferId: string) {
     return this.orderService.existsProductOffer(productOfferId);
+  }
+
+  @EventPattern('payment.paid')
+  async paidOrder(@Payload() paidOrderDto: PaidOrderDto) {
+    console.log(
+      `Received payment.paid event for order: ${paidOrderDto.orderId}`,
+    );
+    await this.orderService.paidOrder(paidOrderDto);
+  }
+
+  // En OrderController
+
+  @MessagePattern('order.retryPayment')
+  retryPayment(@Payload() orderId: string) {
+    return this.orderService.retryPayment(orderId);
   }
 
   @MessagePattern('order.existsProductOffer')
