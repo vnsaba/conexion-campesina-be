@@ -13,6 +13,7 @@ import { LoginUserDto } from './dto/login-user.dto';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { UpdateClientStatus } from './dto/update-client-status';
+import { UpdateClienInfo } from './dto/update-client-info.dto';
 
 @Injectable()
 export class AuthServiceService extends PrismaClient implements OnModuleInit {
@@ -276,6 +277,46 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
       const updatedUser = await this.user.update({
         where: { id: clientId },
         data: { status: newStatus },
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...restUser } = updatedUser;
+
+      return restUser;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
+   * Updates only the user's address and fullName.
+   *
+   * @param userId - The user's unique identifier.
+   * @param updateClientDto - DTO with optional address and fullName.
+   * @returns The updated user object without the password.
+   * @throws {RpcException} If user does not exist or an internal error occurs.
+   */
+  async updateUserProfile(updateClientDto: UpdateClienInfo) {
+    try {
+      const { clientId: userId } = updateClientDto;
+
+      const user = await this.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: `User with id '${userId}' not found`,
+        });
+      }
+
+      const updatedUser = await this.user.update({
+        where: { id: userId },
+        data: {
+          fullName: updateClientDto.fullName?.trim() ?? user.fullName,
+          address: updateClientDto.address?.trim() ?? user.address,
+        },
       });
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
