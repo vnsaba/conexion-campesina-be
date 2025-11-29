@@ -44,7 +44,9 @@ describe('ProductOfferService', () => {
 
   // Mock NATS ClientProxy
   const mockNatsClient = {
-    send: jest.fn().mockReturnValue(of({ id: 'producer123', fullName: 'Producer Name' })),
+    send: jest
+      .fn()
+      .mockReturnValue(of({ id: 'producer123', fullName: 'Producer Name' })),
     emit: jest.fn().mockReturnValue(of({})),
   };
 
@@ -94,7 +96,7 @@ describe('ProductOfferService', () => {
 
     service.$connect = jest.fn().mockResolvedValue(undefined);
     service.$disconnect = jest.fn().mockResolvedValue(undefined);
-    
+
     // Reset NATS client mocks
     mockNatsClient.send.mockClear();
     mockNatsClient.emit.mockClear();
@@ -272,7 +274,7 @@ describe('ProductOfferService', () => {
 
     it('should succeed with different valid Unit enum values', async () => {
       const units = [Unit.KILOGRAMO, Unit.GRAMO, Unit.LIBRA, Unit.UNIDAD];
-      
+
       for (const unit of units) {
         const dto = { ...createDto, unit };
         (service.productBase.findUnique as jest.Mock).mockResolvedValue(

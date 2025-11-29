@@ -1,33 +1,48 @@
 import {
+  HttpStatus,
+  Inject,
   Injectable,
   Logger,
   OnModuleInit,
-  HttpStatus,
-  Inject,
 } from '@nestjs/common';
-import { ClientProxy, RpcException } from '@nestjs/microservices';
 import { PrismaClient } from '../generated/prisma';
+import { ClientProxy, RpcException } from '@nestjs/microservices';
+import { PdfGenerator } from './utils/pdf-generator';
 import { catchError, firstValueFrom, of } from 'rxjs';
 
 @Injectable()
 export class ShippingService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger('ShippingService');
-
   constructor(
     @Inject(process.env.NATS_SERVICE_KEY || 'NATS_SERVICE')
     private readonly natsClient: ClientProxy,
   ) {
     super();
   }
-
   async onModuleInit(): Promise<void> {
-    await this.$connect();
-    this.logger.log('Database connected');
+    try {
+      await this.$connect();
+      this.logger.log('✅ Database connected successfully');
+
+      // Test a simple query - wrap in try-catch to handle errors gracefully
+      try {
+        await this.shippingReceipt.findMany({ take: 1 });
+        this.logger.log('✅ Database query test successful');
+      } catch (queryError) {
+        this.logger.warn(
+          '⚠️ Database connected but query test failed. This is expected if auth credentials need verification.',
+        );
+        this.logger.warn(`Query error: ${queryError.message}`);
+        // Don't throw here - allow the service to start
+      }
+    } catch (error) {
+      this.logger.error('❌ Database connection failed:', error.message);
+      throw error;
+    }
   }
 
   async create(idOrder: string) {
     try {
-      // 1. Obtener orden
       const order = await firstValueFrom(
         this.natsClient.send('order.findOne', idOrder).pipe(
           catchError((err) => {
@@ -48,7 +63,8 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
 
       // Verificar si ya existe un comprobante para esta orden
       const existingReceipt = await this.findReceiptByOrder(idOrder);
-      if (existingReceipt) {
+      this.logger.debug(existingReceipt, 'Existing receipt details received');
+      if (existingReceipt.length > 0) {
         throw new RpcException({
           status: HttpStatus.CONFLICT,
           message: 'Shipping receipt already exists for this order',
@@ -69,7 +85,7 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
         ),
       );
 
-      // 3. Construir items con productOffer
+      // 3. Construir items con productOffer y precios
       const items = await Promise.all(
         itemsOrder.map(async (item) => {
           const productOffer = await firstValueFrom(
@@ -81,16 +97,25 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
                     producerId: 'UNKNOWN_PRODUCER',
                     name: 'Unknown Product',
                     unit: 'unit',
+                    weight: 0,
                   }),
                 ),
               ),
           );
 
+          const unitPrice = item.unitPrice || 0;
+          const quantity = item.quantity || 0;
+          const totalPrice = unitPrice * quantity;
+          this.logger.debug(
+            `Item processed: ${productOffer.name}, Quantity: ${quantity}, Unit Price: ${unitPrice}, Total Price: ${totalPrice}`,
+          );
           return {
             productName: productOffer.name,
-            quantity: item.quantity,
+            quantity: quantity,
             unit: productOffer.unit,
             weight: productOffer.weight ?? 0,
+            unitPrice: unitPrice,
+            totalPrice: totalPrice,
             producerId: productOffer.producerId,
           };
         }),
@@ -145,6 +170,8 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
               quantity: i.quantity,
               unit: i.unit,
               weight: i.weight,
+              unitPrice: i.unitPrice,
+              totalPrice: i.totalPrice,
             })),
           },
         },
@@ -182,7 +209,16 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
         });
       }
       // Lógica para generar el documento PDF usando los datos del comprobante
-      return Buffer.from('PDF binary data here');
+      const pdfBuffer = await new PdfGenerator().generateShippingReceipt(
+        receipt,
+      );
+
+      // Return PDF as base64 string for proper serialization over NATS
+      return {
+        pdf: pdfBuffer.toString('base64'),
+        filename: `shipping-receipt-${receipt.id}.pdf`,
+        contentType: 'application/pdf',
+      };
     } catch (error) {
       this.logger.error(error);
       throw new RpcException({
@@ -197,13 +233,17 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
 
   async findReceiptByOrder(idOrder: string) {
     try {
-      const receipt = await this.shippingReceipt.findFirst({
-        where: { orderId: idOrder },
-        include: { items: true },
-      });
+      this.logger.log(`Fetching receipt for order ID: ${idOrder}`);
+      // const receipt = await this.shippingReceipt.findFirst({
+      //   where: { orderId: idOrder },
+      // });
+
+      const receipt = await this.shippingReceipt.findMany();
+
       return receipt;
     } catch (error) {
       this.logger.error('Error fetching receipt by order', error.stack);
+
       throw new RpcException({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to fetch receipt by order',

@@ -98,7 +98,13 @@
       "entryFile": "main",
       "sourceRoot": "apps/shipping-service/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/shipping-service/tsconfig.app.json"
+        "tsConfigPath": "apps/shipping-service/tsconfig.app.json",
+        "assets": [
+          {
+            "include": "templates/**/*",
+            "outDir": "dist/apps/shipping-service"
+          }
+        ]
       }
     }
   }

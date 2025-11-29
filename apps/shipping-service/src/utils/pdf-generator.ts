@@ -8,13 +8,27 @@ export class PdfGenerator {
   private compiledTemplate: HandlebarsTemplateDelegate | null = null;
 
   constructor() {
-    this.templatePath = path.join(
+    // Try production path first (dist/apps/shipping-service/templates)
+    let templatePath = path.join(
       __dirname,
       '..',
       'templates',
       'receipt-template.hbs',
     );
 
+    // If not found, try development path (apps/shipping-service/src/templates)
+    if (!fs.existsSync(templatePath)) {
+      templatePath = path.join(
+        process.cwd(),
+        'apps',
+        'shipping-service',
+        'src',
+        'templates',
+        'receipt-template.hbs',
+      );
+    }
+
+    this.templatePath = templatePath;
     this.ensureTemplateExists();
     this.loadTemplate();
   }
@@ -34,12 +48,11 @@ export class PdfGenerator {
    * Load and pre-compile Handlebars template so it is not reloaded on every call
    */
   private loadTemplate() {
-    // Register Handlebars helpers
     this.registerHelpers();
 
     const templateSource = fs.readFileSync(this.templatePath, 'utf-8');
     this.compiledTemplate = handlebars.compile(templateSource, {
-      strict: false, // Allow optional fields
+      strict: false,
     });
   }
 
@@ -47,7 +60,6 @@ export class PdfGenerator {
    * Register Handlebars helpers for formatting
    */
   private registerHelpers() {
-    // Format date helper
     handlebars.registerHelper('formatDate', (date: string | Date) => {
       if (!date) return 'N/A';
       const d = typeof date === 'string' ? new Date(date) : date;
@@ -60,7 +72,6 @@ export class PdfGenerator {
       });
     });
 
-    // Format currency helper
     handlebars.registerHelper('formatCurrency', (value: number) => {
       if (value === undefined || value === null) return '$0';
       return new Intl.NumberFormat('es-CO', {
@@ -70,7 +81,6 @@ export class PdfGenerator {
       }).format(value);
     });
 
-    // Format weight helper
     handlebars.registerHelper('formatWeight', (value: number) => {
       if (value === undefined || value === null) return '0';
       return value.toFixed(2);
@@ -78,18 +88,39 @@ export class PdfGenerator {
   }
 
   /**
-   * Ensures Puppeteer can run correctly on Linux/Docker environments.
+   * Ensures Puppeteer can run correctly on Windows/Linux/Docker environments.
    */
   private async launchBrowser() {
-    return puppeteer.launch({
+    const chromePaths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+      process.env.CHROME_PATH,
+    ].filter(Boolean);
+
+    // First try to use system Chrome if available
+    for (const chromePath of chromePaths) {
+      if (chromePath && fs.existsSync(chromePath)) {
+        try {
+          console.log(`Using Chrome at: ${chromePath}`);
+          return await puppeteer.launch({
+            executablePath: chromePath,
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+          });
+        } catch (error) {
+          console.warn(
+            `Failed to launch Chrome from ${chromePath}:`,
+            error.message,
+          );
+        }
+      }
+    }
+
+    // Fallback to bundled Chromium with simplified config (best practices from Medium article)
+    console.log('Using bundled Chromium');
+    return await puppeteer.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-      ],
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
   }
 
@@ -99,13 +130,12 @@ export class PdfGenerator {
    * @returns Buffer containing the PDF (ready to be sent to frontend as a Blob)
    */
   async generateShippingReceipt(data: any): Promise<Buffer> {
+    let browser;
     try {
       if (!this.compiledTemplate) {
         throw new Error('Handlebars template was not loaded correctly.');
       }
 
-      // Prepare data with formatted values
-      // Data comes from Prisma so generatedAt is already a Date object
       const templateData = {
         ...data,
         generatedAt: this.formatDate(data.generatedAt),
@@ -117,41 +147,39 @@ export class PdfGenerator {
         items: data.items.map((item) => ({
           ...item,
           weight: item.weight ? item.weight.toFixed(2) : '0.00',
+          unitPrice: this.formatCurrency(item.unitPrice),
+          totalPrice: this.formatCurrency(item.totalPrice),
         })),
         carrierName: data.carrierName || 'N/A',
         remesaNumber: data.remesaNumber || 'N/A',
       };
 
-      // Render HTML with formatted data
       const html = this.compiledTemplate(templateData);
 
-      const browser = await this.launchBrowser();
+      browser = await this.launchBrowser();
       const page = await browser.newPage();
 
-      // Set HTML content
-      await page.setContent(html, {
-        waitUntil: 'networkidle0',
-      });
+      // Simple and reliable approach from Medium article
+      await page.setContent(html);
 
-      // PDF generation config
       const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
-        margin: {
-          top: '18mm',
-          right: '18mm',
-          bottom: '18mm',
-          left: '18mm',
-        },
-        preferCSSPageSize: true,
       });
-
-      await browser.close();
 
       return Buffer.from(pdfBuffer);
     } catch (error) {
       console.error('Error generating PDF:', error);
       throw new Error('Failed to generate shipping receipt PDF');
+    } finally {
+      // Always close browser to prevent resource leaks
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (closeError) {
+          console.error('Error closing browser:', closeError);
+        }
+      }
     }
   }
 

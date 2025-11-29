@@ -337,7 +337,9 @@
             <th>Producto</th>
             <th style="text-align: center;">Cantidad</th>
             <th style="text-align: center;">Unidad</th>
-            <th style="text-align: right;">Peso</th>
+            <th style="text-align: right;">Peso (kg)</th>
+            <th style="text-align: right;">Precio Unit.</th>
+            <th style="text-align: right;">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -346,7 +348,9 @@
             <td>{{this.productName}}</td>
             <td style="text-align: center;">{{this.quantity}}</td>
             <td style="text-align: center;">{{this.unit}}</td>
-            <td style="text-align: right;">{{this.weight}} kg</td>
+            <td style="text-align: right;">{{this.weight}}</td>
+            <td style="text-align: right;">{{this.unitPrice}}</td>
+            <td style="text-align: right;">{{this.totalPrice}}</td>
           </tr>
           {{/each}}
         </tbody>

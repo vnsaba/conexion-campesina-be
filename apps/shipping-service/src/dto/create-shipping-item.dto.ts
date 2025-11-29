@@ -23,4 +23,12 @@ export class CreateItemDto {
   @IsString()
   @IsNotEmpty()
   unit: string;
+
+  @IsNumber()
+  @Min(0)
+  unitPrice: number;
+
+  @IsNumber()
+  @Min(0)
+  totalPrice: number;
 }

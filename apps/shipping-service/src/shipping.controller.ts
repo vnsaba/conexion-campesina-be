@@ -6,13 +6,23 @@ import { ShippingService } from './shipping.service';
 export class ShippingController {
   constructor(private readonly shippingService: ShippingService) {}
 
-  @MessagePattern('createShipping')
+  @MessagePattern('create.Shipping')
   create(@Payload() idOrder: string) {
     return this.shippingService.create(idOrder);
   }
 
-  @MessagePattern('findOneShipping')
+  @MessagePattern('findOne.Shipping')
   findOne(@Payload() id: string) {
     return this.shippingService.findOne(id);
+  }
+
+  @MessagePattern('generate.Shipping.Document')
+  generateShippingDocument(@Payload() orderId: string) {
+    return this.shippingService.generateShippingDocument(orderId);
+  }
+
+  @MessagePattern('find.Receipt.By.Order')
+  findReceiptByOrder(@Payload() orderId: string) {
+    return this.shippingService.findReceiptByOrder(orderId);
   }
 }

@@ -56,7 +56,7 @@ describe('ReviewService', () => {
     };
 
     (service as any).$connect = jest.fn();
-    
+
     // Reset NATS client mocks
     mockNatsClient.send.mockClear();
     mockNatsClient.emit.mockClear();
@@ -326,7 +326,7 @@ describe('ReviewService', () => {
         _avg: { rating: 4.5 },
         _count: { rating: 10 },
       } as any);
-      
+
       jest.spyOn(service.review, 'groupBy').mockResolvedValue([
         { rating: 1, _count: { rating: 1 } },
         { rating: 2, _count: { rating: 2 } },
@@ -350,7 +350,7 @@ describe('ReviewService', () => {
         _avg: { rating: null },
         _count: { rating: 0 },
       } as any);
-      
+
       jest.spyOn(service.review, 'groupBy').mockResolvedValue([]);
 
       const result = await service.findAverageRatingProduct(mockProductOfferId);
@@ -374,9 +374,7 @@ describe('ReviewService', () => {
     it('should throw RpcException when review not found (FAIL - NOT_FOUND)', async () => {
       jest.spyOn(service.review, 'findUnique').mockResolvedValue(null);
 
-      await expect(service.findOne(mockReviewId)).rejects.toThrow(
-        RpcException,
-      );
+      await expect(service.findOne(mockReviewId)).rejects.toThrow(RpcException);
 
       try {
         await service.findOne(mockReviewId);
@@ -536,9 +534,9 @@ describe('ReviewService', () => {
     it('should fail when review not found for client (FAIL - NOT_FOUND)', async () => {
       jest.spyOn(service.review, 'findFirst').mockResolvedValue(null);
 
-      await expect(
-        service.remove(mockReviewId, mockClientId),
-      ).rejects.toThrow(RpcException);
+      await expect(service.remove(mockReviewId, mockClientId)).rejects.toThrow(
+        RpcException,
+      );
 
       try {
         await service.remove(mockReviewId, mockClientId);
