@@ -114,7 +114,7 @@ export class ProductOfferController {
    * Retrieves a specific product offer by ID.
    * Sends request to the NATS product service and returns the product offer data.
    */
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER, ValidRoles.CLIENT)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get(':id')
   findOneProductOffer(@Param('id') id: string) {
