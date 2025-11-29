@@ -20,25 +20,8 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
     super();
   }
   async onModuleInit(): Promise<void> {
-    try {
-      await this.$connect();
-      this.logger.log('✅ Database connected successfully');
-
-      // Test a simple query - wrap in try-catch to handle errors gracefully
-      try {
-        await this.shippingReceipt.findMany({ take: 1 });
-        this.logger.log('✅ Database query test successful');
-      } catch (queryError) {
-        this.logger.warn(
-          '⚠️ Database connected but query test failed. This is expected if auth credentials need verification.',
-        );
-        this.logger.warn(`Query error: ${queryError.message}`);
-        // Don't throw here - allow the service to start
-      }
-    } catch (error) {
-      this.logger.error('❌ Database connection failed:', error.message);
-      throw error;
-    }
+    await this.$connect();
+    this.logger.log('Database connected successfully');
   }
 
   async create(idOrder: string) {
@@ -64,7 +47,7 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
       // Verificar si ya existe un comprobante para esta orden
       const existingReceipt = await this.findReceiptByOrder(idOrder);
       this.logger.debug(existingReceipt, 'Existing receipt details received');
-      if (existingReceipt.length > 0) {
+      if (existingReceipt) {
         throw new RpcException({
           status: HttpStatus.CONFLICT,
           message: 'Shipping receipt already exists for this order',
@@ -113,7 +96,7 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
             productName: productOffer.name,
             quantity: quantity,
             unit: productOffer.unit,
-            weight: productOffer.weight ?? 0,
+            weight: productOffer.weight ?? Math.floor(Math.random() * 50) + 1,
             unitPrice: unitPrice,
             totalPrice: totalPrice,
             producerId: productOffer.producerId,
@@ -134,17 +117,17 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
           senderId: '901234567',
           senderIdType: 'NIT',
           senderAddress: 'Medellín, Antioquia',
-          senderPhone: '+57 3000000000',
+          senderPhone: '+57 312 601 04 32',
 
           // Destinatario
           recipientName: client.fullName,
-          recipientId: client.document ?? '0000',
+          recipientId: client.id ?? '0000',
           recipientIdType: 'CC',
           recipientAddress: addressShipping,
-          recipientPhone: client.phone ?? '000',
+          recipientPhone: client.phone ?? '+57 312 601 04 32',
 
           // Transportadora
-          carrierName: 'Transportadora Genérica',
+          carrierName: 'Transportadora Inter Rapidísimo',
           carrierId: 'NIT 800123123',
           vehiclePlate: 'ABC123',
 
@@ -208,12 +191,11 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
           message: 'Shipping receipt not found for this order',
         });
       }
-      // Lógica para generar el documento PDF usando los datos del comprobante
+
       const pdfBuffer = await new PdfGenerator().generateShippingReceipt(
         receipt,
       );
 
-      // Return PDF as base64 string for proper serialization over NATS
       return {
         pdf: pdfBuffer.toString('base64'),
         filename: `shipping-receipt-${receipt.id}.pdf`,
@@ -234,11 +216,9 @@ export class ShippingService extends PrismaClient implements OnModuleInit {
   async findReceiptByOrder(idOrder: string) {
     try {
       this.logger.log(`Fetching receipt for order ID: ${idOrder}`);
-      // const receipt = await this.shippingReceipt.findFirst({
-      //   where: { orderId: idOrder },
-      // });
-
-      const receipt = await this.shippingReceipt.findMany();
+      const receipt = await this.shippingReceipt.findFirst({
+        where: { orderId: idOrder },
+      });
 
       return receipt;
     } catch (error) {
