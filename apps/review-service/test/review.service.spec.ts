@@ -4,6 +4,7 @@ import { RpcException } from '@nestjs/microservices';
 import { ReviewService } from '../src/review.service';
 import { CreateReviewDto } from '../src/dto/create-review.dto';
 import { UpdateReviewDto } from '../src/dto/update-review.dto';
+import { of } from 'rxjs';
 
 describe('ReviewService', () => {
   let service: ReviewService;
@@ -23,9 +24,21 @@ describe('ReviewService', () => {
     updatedAt: new Date(),
   };
 
+  // Mock NATS ClientProxy
+  const mockNatsClient = {
+    send: jest.fn().mockReturnValue(of({})),
+    emit: jest.fn().mockReturnValue(of({})),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ReviewService],
+      providers: [
+        ReviewService,
+        {
+          provide: 'NATS_SERVICE',
+          useValue: mockNatsClient,
+        },
+      ],
     }).compile();
 
     service = module.get<ReviewService>(ReviewService);
@@ -39,9 +52,14 @@ describe('ReviewService', () => {
       update: jest.fn(),
       delete: jest.fn(),
       aggregate: jest.fn(),
+      groupBy: jest.fn(),
     };
 
     (service as any).$connect = jest.fn();
+
+    // Reset NATS client mocks
+    mockNatsClient.send.mockClear();
+    mockNatsClient.emit.mockClear();
   });
 
   afterEach(() => {
@@ -263,7 +281,13 @@ describe('ReviewService', () => {
 
       const result = await service.findAllProductOffer(mockProductOfferId);
 
-      expect(result).toEqual(mockProductReviews);
+      // Expect reviews with clientName added
+      expect(result).toEqual(
+        mockProductReviews.map((review) => ({
+          ...review,
+          clientName: 'Unknown Client',
+        })),
+      );
       expect(service.review.findMany).toHaveBeenCalledWith({
         where: { productOfferId: mockProductOfferId },
         orderBy: { createdAt: 'desc' },
@@ -300,13 +324,23 @@ describe('ReviewService', () => {
     it('should calculate average rating for product (PASS)', async () => {
       jest.spyOn(service.review, 'aggregate').mockResolvedValue({
         _avg: { rating: 4.5 },
+        _count: { rating: 10 },
       } as any);
+
+      jest.spyOn(service.review, 'groupBy').mockResolvedValue([
+        { rating: 1, _count: { rating: 1 } },
+        { rating: 2, _count: { rating: 2 } },
+        { rating: 3, _count: { rating: 3 } },
+        { rating: 4, _count: { rating: 2 } },
+        { rating: 5, _count: { rating: 2 } },
+      ] as any);
 
       const result = await service.findAverageRatingProduct(mockProductOfferId);
 
-      expect(result).toEqual({ averageRating: 4.5 });
+      expect(result.averageRating).toBe(4.5);
       expect(service.review.aggregate).toHaveBeenCalledWith({
         _avg: { rating: true },
+        _count: { rating: true },
         where: { productOfferId: mockProductOfferId },
       });
     });
@@ -314,11 +348,14 @@ describe('ReviewService', () => {
     it('should return 0 when product has no reviews (PASS)', async () => {
       jest.spyOn(service.review, 'aggregate').mockResolvedValue({
         _avg: { rating: null },
+        _count: { rating: 0 },
       } as any);
+
+      jest.spyOn(service.review, 'groupBy').mockResolvedValue([]);
 
       const result = await service.findAverageRatingProduct(mockProductOfferId);
 
-      expect(result).toEqual({ averageRating: 0 });
+      expect(result.averageRating).toBe(0);
     });
   });
 

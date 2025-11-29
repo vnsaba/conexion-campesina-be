@@ -1,0 +1,531 @@
+<html lang='es'>
+  <head>
+    <meta charset='UTF-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <title>Comprobante de Envío</title>
+    <style>
+      /* Reset y configuración base */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif;
+        background-color: #f5f5f5;
+        padding: 20px;
+        color: #333;
+        line-height: 1.5;
+      }
+
+      /* Contenedor principal - Tamaño A4 */
+      .container {
+        max-width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        background: white;
+        padding: 25mm 20mm;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Header */
+      .header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .header-icon {
+        width: 45px;
+        height: 45px;
+        background-color: #10b981;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        flex-shrink: 0;
+      }
+
+      .header-content {
+        flex: 1;
+      }
+
+      .header-content h1 {
+        font-size: 24px;
+        font-weight: 700;
+        color: #000;
+        margin-bottom: 8px;
+      }
+
+      .header-info {
+        font-size: 13px;
+        color: #6b7280;
+        margin: 3px 0;
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+
+      .header-actions button {
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: 1px solid #d1d5db;
+        background-color: white;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .btn-download {
+        color: #10b981;
+        border-color: #10b981 !important;
+      }
+
+      .btn-download:hover {
+        background-color: #f0fdf4;
+      }
+
+      .btn-print {
+        color: #000;
+        background-color: #10b981 !important;
+        border-color: #10b981 !important;
+      }
+
+      .btn-print:hover {
+        background-color: #059669 !important;
+      }
+
+      /* Secciones */
+      .section {
+        margin-bottom: 25px;
+      }
+
+      .section-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #000;
+        margin-bottom: 12px;
+      }
+
+      /* Info Grid - Remitente y Destinatario */
+      .info-section {
+        margin-bottom: 25px;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+      }
+
+      .info-column {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .info-label {
+        font-size: 11px;
+        color: #6b7280;
+        font-weight: 500;
+      }
+
+      .info-value {
+        font-size: 13px;
+        color: #000;
+        font-weight: 400;
+      }
+
+      /* Carrier Grid */
+      .carrier-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px 25px;
+        margin-top: 15px;
+      }
+
+      .carrier-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      /* Table */
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        border: 1px solid #e5e7eb;
+      }
+
+      .table thead {
+        background-color: #f9fafb;
+      }
+
+      .table th {
+        padding: 10px 12px;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        color: #6b7280;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .table td {
+        padding: 10px 12px;
+        font-size: 13px;
+        color: #000;
+        border-bottom: 1px solid #f3f4f6;
+      }
+
+      .table tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .text-center {
+        text-align: center;
+      }
+
+      .text-right {
+        text-align: right;
+      }
+
+      /* Bottom Section - Firma y Totales */
+      .bottom-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+        margin-top: 30px;
+        margin-bottom: 30px;
+      }
+
+      /* Signature */
+      .signature-container {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .signature-box {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .signature-area {
+        min-height: 80px;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+        font-size: 13px;
+        font-style: italic;
+        background-color: #fafafa;
+      }
+
+      /* Totals */
+      .totals-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        font-size: 13px;
+      }
+
+      .total-label {
+        color: #6b7280;
+        font-weight: 400;
+      }
+
+      .total-value {
+        color: #000;
+        font-weight: 500;
+      }
+
+      .total-final {
+        border-top: 1px solid #e5e7eb;
+        padding-top: 12px;
+        margin-top: 8px;
+      }
+
+      .total-final .total-label {
+        font-size: 16px;
+        font-weight: 700;
+        color: #000;
+      }
+
+      .total-final .total-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: #10b981;
+      }
+
+      /* Footer */
+      .footer {
+        margin-top: 40px;
+        padding-top: 15px;
+        border-top: 1px solid #e5e7eb;
+        text-align: center;
+      }
+
+      .footer-text {
+        font-size: 9px;
+        color: #9ca3af;
+        line-height: 1.6;
+      }
+
+      /* Print styles */
+      @media print {
+        body {
+          padding: 0;
+          background: white;
+        }
+
+        .container {
+          box-shadow: none;
+          max-width: 100%;
+          padding: 15mm;
+          margin: 0;
+        }
+
+        .header-actions {
+          display: none;
+        }
+
+        .section {
+          page-break-inside: avoid;
+        }
+      }
+
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <!-- Header -->
+      <div class='header'>
+        <div class='header-icon'>📦</div>
+        <div class='header-content'>
+          <h1>Comprobante de Envío</h1>
+          <div class='header-info'>
+            <span>Guía: {{receiptNumber}}</span>
+          </div>
+          <div class='header-info'>
+            <span>ID de Pedido: {{orderId}}</span>
+          </div>
+        </div>
+        <div class='header-actions'>
+          <button class='btn-download'>⬇ Descargar PDF</button>
+          <button class='btn-print'>🖨️ Imprimir</button>
+        </div>
+      </div>
+
+      <!-- Sender and Recipient Information -->
+      <div class='section info-section'>
+        <div class='info-grid'>
+          <!-- Sender -->
+          <div class='info-column'>
+            <div class='section-title'>Información del Remitente</div>
+
+            <div class='info-item'>
+              <div class='info-label'>Nombre / Razón Social</div>
+              <div class='info-value'>{{senderName}}</div>
+            </div>
+
+            <div class='info-item'>
+              <div class='info-label'>{{senderIdType}}</div>
+              <div class='info-value'>{{senderId}}</div>
+            </div>
+
+            <div class='info-item'>
+              <div class='info-label'>Dirección</div>
+              <div class='info-value'>{{senderAddress}}</div>
+            </div>
+
+            <div class='info-item'>
+              <div class='info-label'>Teléfono</div>
+              <div class='info-value'>{{senderPhone}}</div>
+            </div>
+          </div>
+
+          <!-- Recipient -->
+          <div class='info-column'>
+            <div class='section-title'>Información del Destinatario</div>
+
+            <div class='info-item'>
+              <div class='info-label'>Nombre</div>
+              <div class='info-value'>{{recipientName}}</div>
+            </div>
+
+            <div class='info-item'>
+              <div class='info-label'>Dirección</div>
+              <div class='info-value'>{{recipientAddress}}</div>
+            </div>
+
+            <div class='info-item'>
+              <div class='info-label'>Contacto</div>
+              <div class='info-value'>{{recipientPhone}}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Carrier Information -->
+      <div class='section'>
+        <div class='section-title'>Datos de la Empresa Transportadora</div>
+        <div class='carrier-grid'>
+          <div class='carrier-item'>
+            <div class='info-label'>Empresa</div>
+            <div class='info-value'>{{carrierName}}</div>
+          </div>
+
+          <div class='carrier-item'>
+            <div class='info-label'>Número de Remesa</div>
+            <div class='info-value'>{{remesaNumber}}</div>
+          </div>
+
+          <div class='carrier-item'>
+            <div class='info-label'>Valor Declarado</div>
+            <div class='info-value'>{{declaredValue}}</div>
+          </div>
+
+          <div class='carrier-item'>
+            <div class='info-label'>Nombre del Transportador</div>
+            <div class='info-value'>Juan Pérez</div>
+          </div>
+
+          <div class='carrier-item'>
+            <div class='info-label'>Identificación</div>
+            <div class='info-value'>1022334455</div>
+          </div>
+
+          <div class='carrier-item'>
+            <div class='info-label'>Placa del Vehículo</div>
+            <div class='info-value'>ABC-123</div>
+          </div>
+
+          <div class='carrier-item'>
+            <div class='info-label'>Tipo de Vehículo</div>
+            <div class='info-value'>Camión Liviano</div>
+          </div>
+
+          <div class='carrier-item'>
+            <div class='info-label'>Tipo de Operación Logística</div>
+            <div class='info-value'>Entrega Programada</div>
+          </div>
+
+          <div class='carrier-item'>
+            <div class='info-label'>Nº de Póliza/Seguro de Transporte</div>
+            <div class='info-value'>POL-99887766</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <div class='section'>
+        <div class='section-title'>Descripción de la Mercancía</div>
+        <table class='table'>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th class='text-center'>Cantidad</th>
+              <th class='text-center'>Unidad</th>
+              <th class='text-right'>Peso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each items}}
+              <tr>
+                <td>{{this.productName}}</td>
+                <td class='text-center'>{{this.quantity}}</td>
+                <td class='text-center'>{{this.unit}}</td>
+                <td class='text-right'>{{this.weight}}</td>
+              </tr>
+            {{/each}}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Bottom Section: Signature and Totals -->
+      <div class='bottom-section'>
+        <!-- Signature -->
+        <div class='signature-container'>
+          <div class='section-title'>Confirmación</div>
+          <div class='signature-box'>
+            <div class='info-label'>Firma/Sello Generador de Carga</div>
+            <div class='signature-area'>
+              {{#if digitalSignature}}
+                {{digitalSignature}}
+              {{else}}
+
+              {{/if}}
+            </div>
+            <div class='info-item' style='margin-top: 15px;'>
+              <div class='info-label'>Fecha y Hora de Envío</div>
+              <div class='info-value'>{{dispatchDate}}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Totals -->
+        <div class='totals-container'>
+          <div class='total-row'>
+            <span class='total-label'>Subtotal Mercancía</span>
+            <span class='total-value'>{{subtotal}}</span>
+          </div>
+          <div class='total-row'>
+            <span class='total-label'>Costo de Transporte</span>
+            <span class='total-value'>{{shippingCost}}</span>
+          </div>
+          <div class='total-row total-final'>
+            <span class='total-label'>Total</span>
+            <span class='total-value'>{{total}}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class='footer'>
+        <div class='footer-text'>
+          Fecha de Generación:
+          {{generatedAt}}
+          | Generado por:
+          {{generatedBy}}
+          | Hash:
+          {{hashCode}}
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

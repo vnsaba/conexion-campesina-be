@@ -43,7 +43,7 @@ export class ReviewController {
     @Body() createReviewDto: CreateReviewDto,
   ) {
     const { productOfferId } = createReviewDto;
-    const productOffer = await this.existProductOffer(productOfferId);
+    const productOffer = await this.existProductOffer(productOfferId, user.id);
     if (!productOffer) {
       throw new RpcException('The product offer does not exist in any order');
     }
@@ -63,11 +63,11 @@ export class ReviewController {
    * Checks if a review is associated with any product offer.
    * Sends a message to the product service to verify its existence in productsOrders.
    */
-  async existProductOffer(id: string): Promise<boolean> {
+  async existProductOffer(id: string, clientId: string): Promise<boolean> {
     try {
       const existProductOfferObservable = this.natsClient.send(
-        'product.offer.findOne',
-        id,
+        'order.existsProductOffer',
+        { productOfferId: id, clientId },
       );
       const productOffer = await firstValueFrom(existProductOfferObservable);
       return !!productOffer;
@@ -81,7 +81,7 @@ export class ReviewController {
    * Sends a request to the review service and returns the list of reviews.
    * @returns An array of reviews
    */
-  @RoleProtected(ValidRoles.ADMIN)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get()
   findAllReviews() {
@@ -90,6 +90,20 @@ export class ReviewController {
         throw new RpcException(error);
       }),
     );
+  }
+
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get('summary/:productOfferId')
+  summaryReviews(@Param('productOfferId') productOfferId: string) {
+    console.log(productOfferId);
+    return this.natsClient
+      .send('findAverageRating.Review.ProductOffer', productOfferId)
+      .pipe(
+        catchError((error) => {
+          throw new RpcException(error);
+        }),
+      );
   }
 
   /**
@@ -203,5 +217,45 @@ export class ReviewController {
         throw new RpcException(error);
       }),
     );
+  }
+
+  /**
+   * Verifica si el cliente ya tiene una reseña para este producto
+   * y tiene una orden con ese producto para saber si es candidato a hacer una reseña.
+   * @param user Usuario autenticado
+   * @param productOfferId ID de la oferta de producto
+   * @returns true si puede hacer reseña, false si ya la hizo o no ha comprado el producto
+   */
+  @RoleProtected(ValidRoles.CLIENT)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get('has-reviewed/:productOfferId')
+  async hasReviewed(
+    @User() user: CurrentUser,
+    @Param('productOfferId') productOfferId: string,
+  ) {
+    const productOffer = await this.existProductOffer(productOfferId, user.id);
+
+    if (!productOffer) {
+      return false;
+    }
+
+    const clientReviews = await firstValueFrom(
+      this.findReviewsByClientId(user).pipe(
+        catchError((error) => {
+          throw new RpcException({
+            status: error.status || 500,
+            message: error.message || 'Error fetching client reviews',
+          });
+        }),
+      ),
+    );
+
+    const hasReviewedProduct = Array.isArray(clientReviews)
+      ? clientReviews.some(
+          (review: any) => review.productOfferId === productOfferId,
+        )
+      : false;
+
+    return !hasReviewedProduct;
   }
 }

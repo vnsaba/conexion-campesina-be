@@ -74,4 +74,16 @@ export class OrderController {
   retryPayment(@Payload() orderId: string) {
     return this.orderService.retryPayment(orderId);
   }
+
+  @MessagePattern('order.existsProductOffer')
+  existsProductOrderClient(
+    @Payload()
+    payloadProductOrder: {
+      productOfferId: string;
+      clientId: string;
+    },
+  ) {
+    const { productOfferId, clientId } = payloadProductOrder;
+    return this.orderService.existsProductOrderClient(productOfferId, clientId);
+  }
 }
