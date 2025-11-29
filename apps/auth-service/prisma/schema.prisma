@@ -29,6 +29,7 @@ enum UserStatus {
 model User {
   id       String @id @default(auto()) @map("_id") @db.ObjectId
   fullName String
+  address String @default("")
   email    String @unique
   password String
   role ValidRoles
