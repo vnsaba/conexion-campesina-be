@@ -571,6 +571,18 @@ export class OrderService extends PrismaClient implements OnModuleInit {
     // 2. Avisar al inventario (usando los detalles que ya trajimos)
     this.publishOrderStatusEvents('PAID', updatedOrder.orderDetails);
 
+    // 3. Notificar a productores sobre la orden pagada
+    this.notifyProducers(
+      updatedOrder,
+      updatedOrder.orderDetails,
+      updatedOrder.clientId,
+    ).catch((error) => {
+      this.logger.warn(
+        `Failed to send notifications for order ${updatedOrder.id}`,
+        error,
+      );
+    });
+
     this.logger.log(
       `Orden ${updatedOrder.id} actualizada a PAID y notificada a inventario`,
     );
@@ -599,5 +611,53 @@ export class OrderService extends PrismaClient implements OnModuleInit {
     const paymentSession = await this.createPaymentSession(order);
 
     return paymentSession;
+  }
+
+  /**
+   * Notifies producers about a new paid order containing their products
+   * @param order - The paid order
+   * @param orderDetails - The order details
+   * @param clientId - The ID of the client who placed the order
+   */
+  private async notifyProducers(
+    order: OrderWithProducts,
+    orderDetails: OrderDetails[],
+    clientId: string,
+  ): Promise<void> {
+    const uniqueProductOfferIds = [
+      ...new Set(orderDetails.map((detail) => detail.productOfferId)),
+    ];
+
+    const producerPromises = uniqueProductOfferIds.map((productOfferId) =>
+      firstValueFrom(
+        this.natsClient
+          .send('product.offer.getProducerId', productOfferId)
+          .pipe(catchError(() => of(null))),
+      ),
+    );
+
+    const producerIds = await Promise.all(producerPromises);
+    const uniqueProducerIds = [
+      ...new Set(producerIds.filter((id) => id !== null)),
+    ];
+
+    if (uniqueProducerIds.length === 0) {
+      return;
+    }
+
+    const clientInfo = await firstValueFrom(
+      this.natsClient
+        .send('auth.get.user', clientId)
+        .pipe(catchError(() => of({ fullName: 'Unknown Client' }))),
+    );
+
+    this.natsClient.emit('notification.order.created', {
+      orderId: order.id,
+      producerIds: uniqueProducerIds,
+      clientName: clientInfo.fullName || 'Unknown Client',
+      totalAmount: order.totalAmount,
+      productCount: order.totalItems,
+      orderDate: order.orderDate,
+    });
   }
 }

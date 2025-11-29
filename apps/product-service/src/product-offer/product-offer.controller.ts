@@ -82,4 +82,9 @@ export class ProductOfferController {
   getName(@Payload() productOfferId: string) {
     return this.productOfferService.getName(productOfferId);
   }
+
+  @MessagePattern('product.offer.getProducerId')
+  getProducerId(@Payload() productOfferId: string) {
+    return this.productOfferService.getProducerId(productOfferId);
+  }
 }
