@@ -25,10 +25,11 @@ model ProductOffer {
   name          String
   description   String
   price         Float
-  isAvailable   Boolean     @default(true)
+  isAvailable   Boolean     @default(false) // no va ser true hasta que no lo asocie a un inventario
   imageUrl      String
   unit          Unit
-  quantity      Float
+  quantity      Float // Cantidad que compone UNA unidad de venta (ej: 500g)
+  stockLimit    Float       @default(0) // Límite artificial de stock. 0 = sin límite
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -66,25 +67,25 @@ enum Category {
 }
 
 enum Unit {
-  KILOGRAMO   @map("Kg")
-  GRAMO       @map("g")
-  LITRO       @map("L")
-  MILILITRO   @map("mL")
-  TONELADA    @map("t")
-  LIBRA       @map("lb")
-  ARROBA      @map("arroba")
-  CARGA       @map("Carga")
-  BULTO       @map("Bulto")
-  SACO        @map("Saco")
-  CAJA        @map("Caja")
-  CANASTA     @map("Canasta")
-  ATADO       @map("Atado")
-  MANOJO      @map("Manojo")
-  RACIMO      @map("Racimo")
-  UNIDAD      @map("Unidad")
-  DOCENA      @map("Docena")
+  KILOGRAMO    @map("Kg")
+  GRAMO        @map("g")
+  LITRO        @map("L")
+  MILILITRO    @map("mL")
+  TONELADA     @map("t")
+  LIBRA        @map("lb")
+  ARROBA       @map("arroba")
+  CARGA        @map("Carga")
+  BULTO        @map("Bulto")
+  SACO         @map("Saco")
+  CAJA         @map("Caja")
+  CANASTA      @map("Canasta")
+  ATADO        @map("Atado")
+  MANOJO       @map("Manojo")
+  RACIMO       @map("Racimo")
+  UNIDAD       @map("Unidad")
+  DOCENA       @map("Docena")
   MEDIA_DOCENA @map("Media_docena")
-  PAR         @map("Par")
-  CUARTILLA   @map("Cuartilla")
-  BOTELLA     @map("Botella")
+  PAR          @map("Par")
+  CUARTILLA    @map("Cuartilla")
+  BOTELLA      @map("Botella")
 }
