@@ -1,21 +1,9 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-
-export interface NotificationPayload {
-  orderId: string;
-  producerIds: string[];
-  clientName: string;
-  totalAmount: number;
-  productCount: number;
-  orderDate: Date;
-}
-
-export interface LowStockPayload {
-  producerId: string;
-  productOfferId: string;
-  available_quantity: number;
-  minimum_threshold: number;
-}
+import {
+  NotificationPayload,
+  LowStockPayload,
+} from './interfaces/notification-payload.interface';
 
 @Injectable()
 export class NotificationServiceService {
@@ -31,6 +19,7 @@ export class NotificationServiceService {
       type: 'NEW_ORDER',
       orderId: payload.orderId,
       clientName: payload.clientName,
+      address: payload.address,
       totalAmount: payload.totalAmount,
       productCount: payload.productCount,
       orderDate: payload.orderDate,

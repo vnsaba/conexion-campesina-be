@@ -715,6 +715,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       orderId: order.id,
       producerIds: uniqueProducerIds,
       clientName: clientInfo.fullName || 'Unknown Client',
+      address: order.address,
       totalAmount: order.totalAmount,
       productCount: order.totalItems,
       orderDate: order.orderDate,

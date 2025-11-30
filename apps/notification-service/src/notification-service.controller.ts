@@ -1,10 +1,10 @@
 import { Controller } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
+import { NotificationServiceService } from './notification-service.service';
 import {
-  NotificationServiceService,
   NotificationPayload,
   LowStockPayload,
-} from './notification-service.service';
+} from './interfaces/notification-payload.interface';
 
 @Controller()
 export class NotificationServiceController {
