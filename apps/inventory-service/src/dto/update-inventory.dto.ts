@@ -10,4 +10,9 @@ export class UpdateInventoryDto {
   @IsOptional()
   @Min(0)
   minimum_threshold?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  maximum_capacity?: number;
 }

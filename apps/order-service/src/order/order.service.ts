@@ -53,15 +53,16 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   async create(clientId: string, createOrderDto: CreateOrderDto) {
     const { address, orderDetails } = createOrderDto;
 
-    if (!orderDetails || orderDetails.length === 0) {
-      throw new RpcException({
-        status: HttpStatus.BAD_REQUEST,
-        message: 'Order must contain at least one product',
-      });
-    }
-
     try {
-      // 1. Obtener los IDs de los productos solicitados
+      // 1. Validaciones básicas de entrada
+      if (!orderDetails || orderDetails.length === 0) {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Order must contain at least one product',
+        });
+      }
+
+      // 2. Recolectar IDs y validar cantidades positivas
       const productOfferIds = orderDetails.map((detail) => {
         if (detail.quantity <= 0) {
           throw new RpcException({
@@ -72,7 +73,8 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         return detail.productOfferId;
       });
 
-      // 2. Traer la información REAL de los productos desde el Microservicio de Catálogo
+      // 3. Obtener información REAL de los productos (Catálogo)
+      // Usamos Promise.all para traerlos en paralelo
       const products: any[] = await Promise.all(
         productOfferIds.map((id) =>
           firstValueFrom(
@@ -86,8 +88,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         ),
       );
 
-      // 3. Validar que todos los productos existan
-      // Si alguno es null, significa que no existe en el catálogo
+      // 4. Verificar si algún producto no existe
       const missingProducts = products
         .map((p, index) => (p ? null : productOfferIds[index]))
         .filter((id) => id !== null);
@@ -95,28 +96,63 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       if (missingProducts.length > 0) {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
-          message: `Los siguientes productos no existen o no están disponibles: ${missingProducts.join(', ')}`,
+          message: `Products not found: ${missingProducts.join(', ')}`,
         });
       }
 
+      // 5. Verificar disponibilidad (flag isAvailable del producto)
       const unavailableProducts = products.filter((p) => !p.isAvailable);
       if (unavailableProducts.length > 0) {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
-          message: `Los siguientes productos no están disponibles para venta: ${unavailableProducts.map((p) => p.name).join(', ')}`,
+          message: `Products not available for sale: ${unavailableProducts.map((p) => p.name).join(', ')}`,
         });
       }
 
-      // 5. Calcular totales usando el PRECIO REAL (de la BD, no del usuario)
+      // =================================================================
+      // 🛡️ PASO CRÍTICO: VALIDACIÓN DE STOCK SÍNCRONA
+      // Preguntamos al Inventario si tiene suficiente ANTES de crear la orden
+      // =================================================================
+      for (const detail of orderDetails) {
+        const product = products.find((p) => p.id === detail.productOfferId);
+
+        try {
+          const hasStock = await firstValueFrom(
+            this.natsClient.send('inventory.validateStock', {
+              productOfferId: detail.productOfferId,
+              quantity: detail.quantity,
+            }),
+          );
+
+          if (!hasStock) {
+            throw new RpcException({
+              status: HttpStatus.BAD_REQUEST,
+              message: `Stock insuficiente para el producto: ${product.name}. Intenta con una cantidad menor.`,
+            });
+          }
+        } catch (error) {
+          // Si el servicio de inventario falla o devuelve error, asumimos que no se puede vender
+          if (error instanceof RpcException) throw error; // Re-lanzar si es nuestro error de stock
+
+          this.logger.error(
+            `Error validando stock para ${product.name}`,
+            error,
+          );
+          throw new RpcException({
+            status: HttpStatus.INTERNAL_SERVER_ERROR,
+            message: `No se pudo verificar el stock para ${product.name}. Intente más tarde.`,
+          });
+        }
+      }
+      // =================================================================
+
+      // 6. Calcular totales y preparar detalles
       let totalAmount = 0;
       let totalItems = 0;
 
       const processedOrderDetails = orderDetails.map((detail) => {
-        // Buscamos el producto real correspondiente a este detalle
         const product = products.find((p) => p.id === detail.productOfferId);
-
-        // Aquí tomamos el precio real
-        const realPrice = product.price;
+        const realPrice = product.price; // Precio seguro de la BD
         const subtotal = detail.quantity * realPrice;
 
         totalAmount += subtotal;
@@ -125,12 +161,12 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         return {
           productOfferId: detail.productOfferId,
           quantity: detail.quantity,
-          price: realPrice, // Guardamos el precio histórico real
+          price: realPrice,
           subtotal: subtotal,
         };
       });
 
-      // 6. Guardar la orden en la Base de Datos
+      // 7. Crear la orden en Base de Datos
       const order = await this.order.create({
         data: {
           clientId,
@@ -147,9 +183,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         },
       });
 
-      // 7. Publicar eventos
-      this.publishOrderPendingEvents(order.orderDetails);
-
       return order;
     } catch (error) {
       if (error instanceof RpcException) {
@@ -161,16 +194,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         message: 'Failed to create order',
       });
-    }
-  }
-
-  private publishOrderPendingEvents(orderDetails: OrderDetails[]) {
-    for (const detail of orderDetails) {
-      const data = {
-        productOfferId: detail.productOfferId,
-        quantity: detail.quantity,
-      };
-      this.natsClient.emit('order.pending', data);
     }
   }
 
@@ -307,6 +330,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         where: { clientId },
         include: {
           orderDetails: true,
+          orderReceipt: true,
         },
         orderBy: { orderDate: 'desc' },
       });
@@ -599,8 +623,14 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       },
     });
 
-    // 2. Avisar al inventario (usando los detalles que ya trajimos)
-    this.publishOrderStatusEvents('PAID', updatedOrder.orderDetails);
+    for (const detail of updatedOrder.orderDetails) {
+      const data = {
+        productOfferId: detail.productOfferId,
+        quantity: detail.quantity,
+      };
+      // Emitimos el evento con el detalle de qué descontar
+      this.natsClient.emit('order.confirmed', data);
+    }
 
     // 3. Notificar a productores sobre la orden pagada
     this.notifyProducers(
@@ -617,31 +647,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
     this.logger.log(
       `Orden ${updatedOrder.id} actualizada a PAID y notificada a inventario`,
     );
-  }
-
-  /**
-   * Regenera la sesión de pago para una orden existente.
-   */
-  async retryPayment(orderId: string) {
-    const order = await this.findOne(orderId);
-
-    if (order.status === 'PAID') {
-      throw new RpcException({
-        status: HttpStatus.BAD_REQUEST,
-        message: 'Order is already paid',
-      });
-    }
-
-    if (order.status === 'CANCELLED') {
-      throw new RpcException({
-        status: HttpStatus.BAD_REQUEST,
-        message: 'Order is cancelled',
-      });
-    }
-
-    const paymentSession = await this.createPaymentSession(order);
-
-    return paymentSession;
   }
 
   /**

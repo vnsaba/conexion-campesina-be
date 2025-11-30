@@ -27,7 +27,6 @@ export class AuthServiceController {
 
   @MessagePattern('auth.get.user')
   getUser(@Payload() userId: string) {
-    console.log('Getting user with ID:', userId);
     return this.authServiceService.getByUser(userId);
   }
 
