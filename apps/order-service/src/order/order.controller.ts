@@ -69,7 +69,6 @@ export class OrderController {
   }
 
   // En OrderController
-
   @MessagePattern('order.retryPayment')
   retryPayment(@Payload() orderId: string) {
     return this.orderService.retryPayment(orderId);

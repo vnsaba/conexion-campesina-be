@@ -307,6 +307,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         where: { clientId },
         include: {
           orderDetails: true,
+          orderReceipt: true,
         },
         orderBy: { orderDate: 'desc' },
       });
@@ -568,7 +569,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       },
     });
 
-    // 2. Avisar al inventario (usando los detalles que ya trajimos)
     this.publishOrderStatusEvents('PAID', updatedOrder.orderDetails);
 
     this.logger.log(

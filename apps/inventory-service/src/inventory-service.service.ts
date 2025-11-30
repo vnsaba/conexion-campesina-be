@@ -4,7 +4,6 @@ import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { ClientProxy } from '@nestjs/microservices';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
 import { firstValueFrom } from 'rxjs';
-import { OrderPendingDto } from './dto/order-pending.dto';
 import { UnitConverterService } from './UnitConverterService';
 import { RpcError } from '../../../libs/helpers/rcp-error.helpers';
 import { PrismaService } from '../provider/prisma.service';
@@ -260,8 +259,8 @@ export class InventoryService {
       const updatedInventory = await this.updateBase(id, updateInventory);
 
       if (updatedInventory) {
-        this.checkLowStock(updatedInventory); // enviar evento de low stock si aplica
-        this.productAvailability(updatedInventory); // en el producto ofertado que lo marque como false
+        this.checkLowStock(updatedInventory);
+        this.productAvailability(updatedInventory);
       }
 
       return updatedInventory;
@@ -338,11 +337,10 @@ export class InventoryService {
 
       if (!inventory || !productOffer) return;
 
-      // 1. CORRECCIÓN: Calcular Total Real (Cantidad Orden * Cantidad Unitaria de Oferta)
       const totalQuantity = quantity * productOffer.quantity;
 
       const unitEquivalent = this.unitConverter.convert(
-        totalQuantity, // Usamos el total real
+        totalQuantity,
         productOffer.unit,
         inventory.unit,
       );
@@ -356,7 +354,6 @@ export class InventoryService {
       const updatedInventory = await this.prisma.inventory.update({
         where: { id: inventory.id },
         data: {
-          reserved_quantity: { decrement: unitEquivalent },
           available_quantity: { decrement: unitEquivalent },
         },
       });
@@ -370,13 +367,13 @@ export class InventoryService {
       );
     }
   }
+
   /**
    * [Manejador de Evento] Reacciona al evento 'order.cancelled'.
    * Libera el stock que estaba reservado.
    *
    * @description
    * 1. Busca el inventario.
-   * 2. Decrementa `reserved_quantity` (libera la reserva).
    *
    * @param productOfferId - ID del producto en la orden
    * @param quantity - Cantidad que se había reservado
@@ -392,7 +389,6 @@ export class InventoryService {
       );
       if (!inventory || !productOffer) return;
 
-      // 1. CORRECCIÓN: Calcular Total Real
       const totalQuantity = quantity * productOffer.quantity;
 
       const unitEquivalent = this.unitConverter.convert(
@@ -403,66 +399,13 @@ export class InventoryService {
 
       await this.prisma.inventory.update({
         where: { id: inventory.id },
-        data: { reserved_quantity: { decrement: unitEquivalent } },
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to increase stock for productOfferId '${productOfferId}'`,
-        (error as Error).stack,
-      );
-    }
-  }
-
-  /**
-   * [Manejador de Evento] Reacciona al evento 'order.pending'.
-   * "Reserva" el stock temporalmente mientras se espera el pago.
-   *
-   * @description
-   * 1. Busca el inventario.
-   * 2. Incrementa `reserved_quantity` (aparta el stock).
-   *
-   * @param data - DTO con { productOfferId, quantity }
-   * @returns void
-   * @note Atrapa errores internamente (log) y NO relanza la excepción.
-   */
-  async handleOrderPending(data: OrderPendingDto) {
-    try {
-      const inventory = await this.findByProductOffer(data.productOfferId);
-      const productOffer = await firstValueFrom(
-        this.natsClient.send('product.offer.findOne', data.productOfferId),
-      );
-      if (!inventory || !productOffer) return;
-
-      // 1. CORRECCIÓN: Calcular Total Real
-      const totalQuantity = data.quantity * productOffer.quantity;
-
-      const unitEquivalent = this.unitConverter.convert(
-        totalQuantity,
-        productOffer.unit,
-        inventory.unit,
-      );
-
-      if (inventory.available_quantity < unitEquivalent) {
-        this.logger.warn(
-          `Insufficient stock to reserve for productOfferId '${data.productOfferId}'`,
-        );
-        return;
-      }
-      if (data.quantity <= 0) {
-        this.logger.warn(
-          `Invalid quantity '${data.quantity}' to reserve for productOfferId '${data.productOfferId}'`,
-        );
-        return;
-      }
-      await this.prisma.inventory.update({
-        where: { id: inventory.id },
         data: {
-          reserved_quantity: { increment: unitEquivalent },
+          available_quantity: { increment: unitEquivalent },
         },
       });
     } catch (error) {
       this.logger.error(
-        `Failed to handle order pending for productOfferId '${data.productOfferId}'`,
+        `Failed to increase stock for productOfferId '${productOfferId}'`,
         (error as Error).stack,
       );
     }

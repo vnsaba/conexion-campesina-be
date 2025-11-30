@@ -3,7 +3,7 @@ import { InventoryService } from './inventory-service.service';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
-import { OrderPendingDto } from './dto/order-pending.dto';
+// import { OrderPendingDto } from './dto/order-pending.dto';
 
 @Controller()
 export class InventoryServiceController {
@@ -48,9 +48,15 @@ export class InventoryServiceController {
 
   // Actualizar inventario (cantidad o threshold)
   @MessagePattern('inventory.update')
-  update(@Payload() data: { id: string; updateInventory: UpdateInventoryDto }) {
-    const { id, updateInventory } = data;
-    return this.inventoryService.update(id, updateInventory);
+  update(
+    @Payload()
+    data: {
+      inventoryId: string;
+      updateInventoryDto: UpdateInventoryDto;
+    },
+  ) {
+    const { inventoryId, updateInventoryDto } = data;
+    return this.inventoryService.update(inventoryId, updateInventoryDto);
   }
 
   // Eliminar inventario
@@ -75,8 +81,8 @@ export class InventoryServiceController {
     return this.inventoryService.handleOrderCancelled(productOfferId, quantity);
   }
 
-  @EventPattern('order.pending')
-  handleOrderPending(data: OrderPendingDto) {
-    return this.inventoryService.handleOrderPending(data);
-  }
+  // @EventPattern('order.pending')
+  // handleOrderPending(data: OrderPendingDto) {
+  //   return this.inventoryService.handleOrderPending(data);
+  // }
 }

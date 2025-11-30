@@ -69,11 +69,14 @@ export class InventoryController {
     );
   }
 
+  /**
+   * Retrieves inventory records for the authenticated producer.
+   */
   @RoleProtected(ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get('/producer')
   findByProducer(@User() user: CurrentUser) {
-    return this.natsClient.send('inventory.findAll', user.id).pipe(
+    return this.natsClient.send('inventory.findByProducer', user.id).pipe(
       catchError((error) => {
         throw new RpcException(error);
       }),
