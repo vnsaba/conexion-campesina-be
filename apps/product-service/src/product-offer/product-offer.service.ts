@@ -452,4 +452,21 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
       );
     }
   }
+
+  async getProducerId(productOfferId: string): Promise<string | null> {
+    try {
+      const productOffer = await this.productOffer.findUnique({
+        where: { id: productOfferId },
+        select: { producerId: true },
+      });
+
+      return productOffer?.producerId || null;
+    } catch (error) {
+      this.logger.error(
+        `Error getting producer ID for product offer ${productOfferId}`,
+        (error as Error).stack,
+      );
+      return null;
+    }
+  }
 }

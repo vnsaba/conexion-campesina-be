@@ -421,8 +421,12 @@ export class InventoryService {
       this.logger.warn(
         `Inventory with id '${inventory.id}' is below minimum threshold`,
       );
-      // Enviar evento de low stock al ms de notificaciones
-      // this.natsClient.emit('inventory.lowStock', inventory);
+      this.natsClient.emit('inventory.lowStock', {
+        producerId: inventory.producerId,
+        productOfferId: inventory.productOfferId,
+        available_quantity: inventory.available_quantity,
+        minimum_threshold: inventory.minimum_threshold,
+      });
     }
   }
 
