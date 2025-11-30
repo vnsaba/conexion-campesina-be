@@ -39,7 +39,6 @@ model Inventory {
   available_quantity Float
   unit               Unit
   minimum_threshold  Float   @default(0)
-  // reserved_quantity  Float   @default(0)
   maximum_capacity   Float?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

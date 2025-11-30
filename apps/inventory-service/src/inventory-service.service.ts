@@ -335,24 +335,22 @@ export class InventoryService {
         this.natsClient.send('product.offer.findOne', productOfferId),
       );
 
-      if (!inventory || !productOffer) return;
-
       const totalQuantity = quantity * productOffer.quantity;
 
       const unitEquivalent = this.unitConverter.convert(
         totalQuantity,
         productOffer.unit,
-        inventory.unit,
+        inventory!.unit,
       );
 
-      if (inventory.available_quantity < unitEquivalent) {
+      if (inventory!.available_quantity < unitEquivalent) {
         throw RpcError.internal(
           `Insufficient stock for product offer id '${productOfferId}'`,
         );
       }
 
       const updatedInventory = await this.prisma.inventory.update({
-        where: { id: inventory.id },
+        where: { id: inventory!.id },
         data: {
           available_quantity: { decrement: unitEquivalent },
         },
@@ -443,5 +441,28 @@ export class InventoryService {
       productOfferId: inventory.productOfferId,
       available,
     });
+  }
+
+  async validateStock(productOfferId: string, quantity: number) {
+    // 1. Buscar Inventario
+    const inventory = await this.findByProductOffer(productOfferId);
+
+    // 2. Buscar Oferta (para saber la conversión)
+    const productOffer = await firstValueFrom(
+      this.natsClient.send('product.offer.findOne', productOfferId),
+    );
+
+    if (!inventory || !productOffer) return false;
+
+    // 3. Hacer la matemática
+    const totalQuantity = quantity * productOffer.quantity;
+    const requiredAmount = this.unitConverter.convert(
+      totalQuantity,
+      productOffer.unit,
+      inventory.unit,
+    );
+
+    // 4. Responder True/False
+    return inventory.available_quantity >= requiredAmount;
   }
 }

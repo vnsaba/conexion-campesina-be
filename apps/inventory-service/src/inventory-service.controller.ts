@@ -81,8 +81,11 @@ export class InventoryServiceController {
     return this.inventoryService.handleOrderCancelled(productOfferId, quantity);
   }
 
-  // @EventPattern('order.pending')
-  // handleOrderPending(data: OrderPendingDto) {
-  //   return this.inventoryService.handleOrderPending(data);
-  // }
+  @MessagePattern('inventory.validateStock') // Petición síncrona
+  validateStock(@Payload() data: { productOfferId: string; quantity: number }) {
+    return this.inventoryService.validateStock(
+      data.productOfferId,
+      data.quantity,
+    );
+  }
 }

@@ -68,12 +68,6 @@ export class OrderController {
     await this.orderService.paidOrder(paidOrderDto);
   }
 
-  // En OrderController
-  @MessagePattern('order.retryPayment')
-  retryPayment(@Payload() orderId: string) {
-    return this.orderService.retryPayment(orderId);
-  }
-
   @MessagePattern('order.existsProductOffer')
   existsProductOrderClient(
     @Payload()
