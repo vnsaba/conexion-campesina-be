@@ -4,6 +4,7 @@ import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderPaginationDto } from './dto/order-pagination.dto';
 import { PaidOrderDto } from './dto/paid-order.dto';
+import { OrderWithProducts } from './interfaces/order-with-product.interface';
 
 @Controller()
 export class OrderController {
@@ -20,7 +21,9 @@ export class OrderController {
     const { clientId, createOrderDto } = payload;
 
     const order = await this.orderService.create(clientId, createOrderDto);
-    const paymentSession = await this.orderService.createPaymentSession(order);
+    const paymentSession = await this.orderService.createPaymentSession(
+      order as OrderWithProducts,
+    );
 
     return { order, paymentSession };
   }
