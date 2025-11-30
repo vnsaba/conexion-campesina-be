@@ -82,4 +82,16 @@ export class OrderController {
     const { productOfferId, clientId } = payloadProductOrder;
     return this.orderService.existsProductOrderClient(productOfferId, clientId);
   }
+
+  @MessagePattern('order.cancel')
+  async cancelOrder(
+    @Payload()
+    payload: {
+      orderId: string;
+      clientId: string;
+    },
+  ) {
+    const { orderId, clientId } = payload;
+    return await this.orderService.cancelOrder(orderId, clientId);
+  }
 }
