@@ -33,7 +33,7 @@ export class ShippingController {
    * @param orderId - The order ID to create the shipping receipt for
    * @returns The created shipping receipt
    */
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.PRODUCER)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Post(':orderId')
   createShipping(@Param('orderId') orderId: string) {
@@ -91,7 +91,7 @@ export class ShippingController {
    * @param res - Express response object
    * @returns PDF file as a download
    */
-  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT, ValidRoles.PRODUCER)
+  @RoleProtected(ValidRoles.ADMIN, ValidRoles.CLIENT)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get('document/:orderId')
   async generateShippingDocument(
