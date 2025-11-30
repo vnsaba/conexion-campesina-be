@@ -5,6 +5,7 @@ import { OrderModule } from '../order/order.module';
 import { ReviewModule } from '../review/review.module';
 import { ShippingModule } from '../shipping/shipping.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { InventoryModule } from '../inventory/inventory.module';
     ReviewModule,
     ShippingModule,
     InventoryModule,
+    NotificationModule,
   ],
 })
 export class ClientGatewayModule {}
