@@ -436,13 +436,29 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         clientMap.set(client.id, client.fullName);
       });
 
-      return orders.map((order) => ({
-        ...order,
-        clientName: clientMap.get(order.clientId) || 'Unknown Client',
-        orderDetails: order.orderDetails.filter((detail) =>
+      return orders.map((order) => {
+        const producerOrderDetails = order.orderDetails.filter((detail) =>
           productOfferIds.includes(detail.productOfferId),
-        ),
-      }));
+        );
+
+        const producerTotalAmount = producerOrderDetails.reduce(
+          (sum, detail) => sum + detail.subtotal,
+          0,
+        );
+
+        const producerTotalItems = producerOrderDetails.reduce(
+          (sum, detail) => sum + detail.quantity,
+          0,
+        );
+
+        return {
+          ...order,
+          clientName: clientMap.get(order.clientId) || 'Unknown Client',
+          orderDetails: producerOrderDetails,
+          totalAmount: producerTotalAmount,
+          totalItems: producerTotalItems,
+        };
+      });
     } catch (error) {
       if (error instanceof RpcException) {
         throw error;
