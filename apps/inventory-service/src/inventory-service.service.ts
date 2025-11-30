@@ -319,7 +319,6 @@ export class InventoryService {
    *
    * @description
    * 1. Valida que haya stock suficiente (disponible < solicitado).
-   * 2. Decrementa `reserved_quantity` (libera la reserva).
    * 3. Decrementa `available_quantity` (descuenta el stock real vendido).
    * 4. Llama a `checkLowStock` y `productAvailability` para reflejar el nuevo stock.
    *
@@ -379,12 +378,36 @@ export class InventoryService {
    * @note Atrapa errores internamente (log) y NO relanza la excepción.
    */
 
-  async handleOrderCancelled(productOfferId: string, quantity: number) {
+  async handleOrderCancelled(
+    orderId: string,
+    productOfferId: string,
+    quantity: number,
+  ) {
     try {
+      // 1) Obtener la orden real desde el MS de Orders
+      const order = await firstValueFrom(
+        this.natsClient.send('order.findOne', orderId),
+      );
+
+      if (!order) {
+        this.logger.error(`Order with id '${orderId}' not found`);
+        return;
+      }
+
+      // 2) Validar que SOLO se pueda cancelar cuando está en pending
+      if (order.status !== 'pending') {
+        this.logger.warn(
+          `Order '${orderId}' cannot be cancelled because status is '${order.status}'`,
+        );
+        return;
+      }
+
+      // 3) Cargar inventario y producto
       const inventory = await this.findByProductOffer(productOfferId);
       const productOffer = await firstValueFrom(
         this.natsClient.send('product.offer.findOne', productOfferId),
       );
+
       if (!inventory || !productOffer) return;
 
       const totalQuantity = quantity * productOffer.quantity;
@@ -395,15 +418,23 @@ export class InventoryService {
         inventory.unit,
       );
 
-      await this.prisma.inventory.update({
+      // 5) Devolver stock (increment)
+      const updatedInventory = await this.prisma.inventory.update({
         where: { id: inventory.id },
         data: {
           available_quantity: { increment: unitEquivalent },
         },
       });
+
+      // 6) Actualizar disponibilidad del producto si aplica
+      this.productAvailability(updatedInventory);
+
+      this.logger.log(
+        `Order '${orderId}' cancelled successfully. Stock returned: ${unitEquivalent}`,
+      );
     } catch (error) {
       this.logger.error(
-        `Failed to increase stock for productOfferId '${productOfferId}'`,
+        `Failed to handle cancellation for order '${orderId}'`,
         (error as Error).stack,
       );
     }
@@ -415,6 +446,10 @@ export class InventoryService {
    * @returns void
    */
   private checkLowStock(inventory: Inventory) {
+    this.logger.warn(
+      `Inventory with id '${inventory.id}' is below minimum threshold`,
+    );
+
     if (inventory.available_quantity <= inventory.minimum_threshold) {
       this.logger.warn(
         `Inventory with id '${inventory.id}' is below minimum threshold`,
@@ -444,17 +479,14 @@ export class InventoryService {
   }
 
   async validateStock(productOfferId: string, quantity: number) {
-    // 1. Buscar Inventario
     const inventory = await this.findByProductOffer(productOfferId);
 
-    // 2. Buscar Oferta (para saber la conversión)
     const productOffer = await firstValueFrom(
       this.natsClient.send('product.offer.findOne', productOfferId),
     );
 
     if (!inventory || !productOffer) return false;
 
-    // 3. Hacer la matemática
     const totalQuantity = quantity * productOffer.quantity;
     const requiredAmount = this.unitConverter.convert(
       totalQuantity,
@@ -462,7 +494,6 @@ export class InventoryService {
       inventory.unit,
     );
 
-    // 4. Responder True/False
     return inventory.available_quantity >= requiredAmount;
   }
 }

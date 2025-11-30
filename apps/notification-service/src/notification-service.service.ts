@@ -34,6 +34,10 @@ export class NotificationServiceService {
   }
 
   handleLowStock(payload: LowStockPayload): void {
+    this.logger.warn(
+      `⚠️ Sending LOW_STOCK notification to producer=${payload.producerId} for productOfferId=${payload.productOfferId}`,
+    );
+
     const notificationData = {
       type: 'LOW_STOCK',
       productOfferId: payload.productOfferId,

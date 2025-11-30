@@ -4,10 +4,6 @@ import { Type } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
 
 export class CreateInventoryDto {
-  // @IsString()
-  // @IsNotEmpty()
-  // producerId: string;
-
   @IsString()
   @IsNotEmpty()
   productOfferId: string;
