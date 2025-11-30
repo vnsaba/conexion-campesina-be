@@ -133,7 +133,8 @@ export class UnitConverterService {
     const toMath = UNIT_MAP[to];
 
     try {
-      return this.math.unit(value, fromMath).toNumber(toMath);
+      const result = this.math.unit(value, fromMath).toNumber(toMath);
+      return Number(result.toFixed(2)); // Siempre 2 decimales
     } catch (e) {
       throw new BadRequestException(
         `Error matemático al convertir ${value} ${from} a ${to}: ${e.message}`,

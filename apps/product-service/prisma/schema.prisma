@@ -25,11 +25,11 @@ model ProductOffer {
   name          String
   description   String
   price         Float
-  isAvailable   Boolean     @default(false) // no va ser true hasta que no lo asocie a un inventario
+  isAvailable   Boolean     @default(true) 
   imageUrl      String
   unit          Unit
-  quantity      Float // Cantidad que compone UNA unidad de venta (ej: 500g)
-  stockLimit    Float       @default(0) // Límite artificial de stock. 0 = sin límite
+  quantity      Float 
+  stockLimit    Float       @default(0) 
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 

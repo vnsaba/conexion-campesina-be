@@ -10,7 +10,7 @@ import {
 export class NotificationServiceController {
   constructor(
     private readonly notificationService: NotificationServiceService,
-  ) {}
+  ) { }
 
   @EventPattern('notification.order.created')
   handleOrderCreated(@Payload() payload: NotificationPayload) {
@@ -19,6 +19,7 @@ export class NotificationServiceController {
 
   @EventPattern('inventory.lowStock')
   handleLowStock(@Payload() payload: LowStockPayload) {
+    console.log('📩 [NotificationService] Low stock event received:', payload);
     this.notificationService.handleLowStock(payload);
   }
 }

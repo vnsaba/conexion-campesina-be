@@ -49,7 +49,7 @@ export class AuthServiceService extends PrismaClient implements OnModuleInit {
       if (user) {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
-          message: 'Email or password is incorrect',
+          message: 'User with this email already exists',
         });
       }
 

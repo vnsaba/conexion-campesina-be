@@ -75,10 +75,19 @@ export class InventoryServiceController {
 
   @EventPattern('order.cancelled')
   handleOrderCancelled(
-    @Payload() data: { productOfferId: string; quantity: number },
+    @Payload()
+    data: {
+      orderId: string;
+      productOfferId: string;
+      quantity: number;
+    },
   ) {
-    const { productOfferId, quantity } = data;
-    return this.inventoryService.handleOrderCancelled(productOfferId, quantity);
+    const { orderId, productOfferId, quantity } = data;
+    return this.inventoryService.handleOrderCancelled(
+      orderId,
+      productOfferId,
+      quantity,
+    );
   }
 
   @MessagePattern('inventory.validateStock') // Petición síncrona
