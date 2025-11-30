@@ -13,12 +13,12 @@ export class UpdateClienInfo {
    */
   @IsString()
   @IsOptional()
-  address: string;
+  address?: string;
 
   /**
    * The user full name.
    */
   @IsString()
   @IsOptional()
-  fullName: string;
+  fullName?: string;
 }
