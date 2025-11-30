@@ -43,15 +43,16 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   /**
    * Creates a new order with automatically calculated totals
    * Orders are always created with PENDING status
+   * The address is automatically retrieved from the user's profile
    *
    * @param clientId - The ID of the client creating the order
-   * @param createOrderDto - Data transfer object containing order details and address
+   * @param createOrderDto - Data transfer object containing order details
    * @returns Promise resolving to the created order with its details
-   * @throws {RpcException} BAD_REQUEST if product offers don't exist
+   * @throws {RpcException} BAD_REQUEST if product offers don't exist or user has no address
    * @throws {RpcException} INTERNAL_SERVER_ERROR if order creation fails
    */
   async create(clientId: string, createOrderDto: CreateOrderDto) {
-    const { address, orderDetails } = createOrderDto;
+    const { orderDetails } = createOrderDto;
 
     if (!orderDetails || orderDetails.length === 0) {
       throw new RpcException({
@@ -61,7 +62,34 @@ export class OrderService extends PrismaClient implements OnModuleInit {
     }
 
     try {
-      // 1. Obtener los IDs de los productos solicitados
+      // 1. Obtener la dirección del usuario desde el servicio de autenticación
+      const user = await firstValueFrom(
+        this.natsClient.send('auth.get.user', clientId).pipe(
+          catchError(() => {
+            this.logger.warn(`Failed to get user information: ${clientId}`);
+            return of(null);
+          }),
+        ),
+      );
+
+      if (!user) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: 'User not found',
+        });
+      }
+
+      if (!user.address || user.address.trim() === '') {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'You must have an address to create an order',
+        });
+      }
+
+      const finalAddress = user.address;
+      this.logger.log(`Usando dirección del perfil del usuario: ${clientId}`);
+
+      // 2. Obtener los IDs de los productos solicitados
       const productOfferIds = orderDetails.map((detail) => {
         if (detail.quantity <= 0) {
           throw new RpcException({
@@ -72,7 +100,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         return detail.productOfferId;
       });
 
-      // 2. Traer la información REAL de los productos desde el Microservicio de Catálogo
+      // 3. Traer la información REAL de los productos desde el Microservicio de Catálogo
       const products: any[] = await Promise.all(
         productOfferIds.map((id) =>
           firstValueFrom(
@@ -86,7 +114,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         ),
       );
 
-      // 3. Validar que todos los productos existan
+      // 4. Validar que todos los productos existan
       // Si alguno es null, significa que no existe en el catálogo
       const missingProducts = products
         .map((p, index) => (p ? null : productOfferIds[index]))
@@ -135,7 +163,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         data: {
           clientId,
           status: 'PENDING',
-          address,
+          address: finalAddress,
           totalAmount,
           totalItems,
           orderDetails: {

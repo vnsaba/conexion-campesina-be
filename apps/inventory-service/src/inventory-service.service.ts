@@ -356,7 +356,6 @@ export class InventoryService {
       const updatedInventory = await this.prisma.inventory.update({
         where: { id: inventory.id },
         data: {
-          reserved_quantity: { decrement: unitEquivalent },
           available_quantity: { decrement: unitEquivalent },
         },
       });
