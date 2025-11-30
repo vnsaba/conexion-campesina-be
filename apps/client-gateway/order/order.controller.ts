@@ -125,4 +125,20 @@ export class OrderController {
       }),
     );
   }
+
+  @RoleProtected(ValidRoles.CLIENT)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Post(':orderId/cancel')
+  cancelOrder(@Param('orderId') orderId: string, @User() user: CurrentUser) {
+    return this.natsClient
+      .send('order.cancel', {
+        orderId,
+        clientId: user.id,
+      })
+      .pipe(
+        catchError((error) => {
+          throw new RpcException(error);
+        }),
+      );
+  }
 }

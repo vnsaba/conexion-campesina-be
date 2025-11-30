@@ -350,7 +350,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
    */
   async findByClientId(clientId: string) {
     try {
-      return await this.order.findMany({
+      const orders = await this.order.findMany({
         where: { clientId },
         include: {
           orderDetails: true,
@@ -358,6 +358,39 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         },
         orderBy: { orderDate: 'desc' },
       });
+
+      const uniqueProductOfferIds = [
+        ...new Set(
+          orders.flatMap((order) =>
+            order.orderDetails.map((detail) => detail.productOfferId),
+          ),
+        ),
+      ];
+
+      const productNamePromises = uniqueProductOfferIds.map((productOfferId) =>
+        firstValueFrom(
+          this.natsClient
+            .send('product.offer.getName', productOfferId)
+            .pipe(catchError(() => of('Producto desconocido'))),
+        ),
+      );
+
+      const productNames = await Promise.all(productNamePromises);
+
+      const productNameMap = new Map<string, string>();
+      uniqueProductOfferIds.forEach((id, index) => {
+        const productName = productNames[index] as string;
+        productNameMap.set(id, productName || 'Producto desconocido');
+      });
+
+      return orders.map((order) => ({
+        ...order,
+        orderDetails: order.orderDetails.map((detail) => ({
+          ...detail,
+          productName:
+            productNameMap.get(detail.productOfferId) || 'Producto desconocido',
+        })),
+      }));
     } catch (error) {
       this.logger.error(
         `Failed to fetch orders for client ${clientId}`,
@@ -436,13 +469,62 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         clientMap.set(client.id, client.fullName);
       });
 
-      return orders.map((order) => ({
-        ...order,
-        clientName: clientMap.get(order.clientId) || 'Unknown Client',
-        orderDetails: order.orderDetails.filter((detail) =>
-          productOfferIds.includes(detail.productOfferId),
+      const uniqueProductOfferIds = [
+        ...new Set(
+          orders.flatMap((order) =>
+            order.orderDetails
+              .filter((detail) =>
+                productOfferIds.includes(detail.productOfferId),
+              )
+              .map((detail) => detail.productOfferId),
+          ),
         ),
-      }));
+      ];
+
+      const productNamePromises = uniqueProductOfferIds.map((productOfferId) =>
+        firstValueFrom(
+          this.natsClient
+            .send('product.offer.getName', productOfferId)
+            .pipe(catchError(() => of('Producto desconocido'))),
+        ),
+      );
+
+      const productNames = await Promise.all(productNamePromises);
+
+      const productNameMap = new Map<string, string>();
+      uniqueProductOfferIds.forEach((id, index) => {
+        const productName = productNames[index] as string;
+        productNameMap.set(id, productName || 'Producto desconocido');
+      });
+
+      return orders.map((order) => {
+        const producerOrderDetails = order.orderDetails.filter((detail) =>
+          productOfferIds.includes(detail.productOfferId),
+        );
+
+        const producerTotalAmount = producerOrderDetails.reduce(
+          (sum, detail) => sum + detail.subtotal,
+          0,
+        );
+
+        const producerTotalItems = producerOrderDetails.reduce(
+          (sum, detail) => sum + detail.quantity,
+          0,
+        );
+
+        return {
+          ...order,
+          clientName: clientMap.get(order.clientId) || 'Unknown Client',
+          orderDetails: producerOrderDetails.map((detail) => ({
+            ...detail,
+            productName:
+              productNameMap.get(detail.productOfferId) ||
+              'Producto desconocido',
+          })),
+          totalAmount: producerTotalAmount,
+          totalItems: producerTotalItems,
+        };
+      });
     } catch (error) {
       if (error instanceof RpcException) {
         throw error;
@@ -555,6 +637,70 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       });
     }
   }
+  /**
+   * Cancels an order by the client who created it
+   * Only orders with PENDING status can be cancelled
+   *
+   * @param orderId - The ID of the order to cancel
+   * @param clientId - The ID of the client attempting to cancel
+   * @returns The cancelled order
+   * @throws RpcException if order not found, not owned by client, or not PENDING
+   */
+  async cancelOrder(orderId: string, clientId: string) {
+    try {
+      const existingOrder = await this.findOne(orderId);
+
+      if (!existingOrder) {
+        throw new RpcException({
+          status: HttpStatus.NOT_FOUND,
+          message: 'Order not found',
+        });
+      }
+
+      // Validar que el cliente es el propietario de la orden
+      if (existingOrder.clientId !== clientId) {
+        throw new RpcException({
+          status: HttpStatus.FORBIDDEN,
+          message: 'You can only cancel your own orders',
+        });
+      }
+
+      // Validar que el status es PENDING
+      if (existingOrder.status !== 'PENDING') {
+        throw new RpcException({
+          status: HttpStatus.BAD_REQUEST,
+          message: `Cannot cancel order with status ${existingOrder.status}. Only PENDING orders can be cancelled`,
+        });
+      }
+
+      // Actualizar el status a CANCELLED
+      const updatedOrder = await this.order.update({
+        where: { id: orderId },
+        data: { status: 'CANCELLED' },
+        include: { orderDetails: true },
+      });
+
+      // Emitir evento para que el inventario se actualice
+      this.publishOrderStatusEvents(
+        'CANCELLED',
+        updatedOrder.orderDetails,
+        orderId,
+      );
+
+      return updatedOrder;
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+
+      this.logger.error(`Failed to cancel order ${orderId}`, error.stack);
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to cancel order',
+      });
+    }
+  }
+
   async updateStatus(updateStatus: UpdateOrderStatusDto) {
     //1. busca la orden
     const { orderId, status } = updateStatus;
@@ -580,6 +726,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   private publishOrderStatusEvents(
     status: OrderStatus,
     orderDetails: OrderDetails[],
+    orderId?: string,
   ) {
     const detailEventMap = {
       CANCELLED: 'order.cancelled',
@@ -591,10 +738,17 @@ export class OrderService extends PrismaClient implements OnModuleInit {
     }
 
     for (const detail of orderDetails) {
-      this.natsClient.emit(eventName, {
+      const payload: any = {
         productOfferId: detail.productOfferId,
         quantity: detail.quantity,
-      });
+      };
+
+      // Incluir orderId solo para eventos de cancelación
+      if (status === 'CANCELLED' && orderId) {
+        payload.orderId = orderId;
+      }
+
+      this.natsClient.emit(eventName, payload);
     }
   }
 
