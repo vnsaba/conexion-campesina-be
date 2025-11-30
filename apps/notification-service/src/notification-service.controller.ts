@@ -10,7 +10,7 @@ import {
 export class NotificationServiceController {
   constructor(
     private readonly notificationService: NotificationServiceService,
-  ) { }
+  ) {}
 
   @EventPattern('notification.order.created')
   handleOrderCreated(@Payload() payload: NotificationPayload) {
