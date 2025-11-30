@@ -350,7 +350,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
    */
   async findByClientId(clientId: string) {
     try {
-      return await this.order.findMany({
+      const orders = await this.order.findMany({
         where: { clientId },
         include: {
           orderDetails: true,
@@ -358,6 +358,39 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         },
         orderBy: { orderDate: 'desc' },
       });
+
+      const uniqueProductOfferIds = [
+        ...new Set(
+          orders.flatMap((order) =>
+            order.orderDetails.map((detail) => detail.productOfferId),
+          ),
+        ),
+      ];
+
+      const productNamePromises = uniqueProductOfferIds.map((productOfferId) =>
+        firstValueFrom(
+          this.natsClient
+            .send('product.offer.getName', productOfferId)
+            .pipe(catchError(() => of('Producto desconocido'))),
+        ),
+      );
+
+      const productNames = await Promise.all(productNamePromises);
+
+      const productNameMap = new Map<string, string>();
+      uniqueProductOfferIds.forEach((id, index) => {
+        const productName = productNames[index] as string;
+        productNameMap.set(id, productName || 'Producto desconocido');
+      });
+
+      return orders.map((order) => ({
+        ...order,
+        orderDetails: order.orderDetails.map((detail) => ({
+          ...detail,
+          productName:
+            productNameMap.get(detail.productOfferId) || 'Producto desconocido',
+        })),
+      }));
     } catch (error) {
       this.logger.error(
         `Failed to fetch orders for client ${clientId}`,
@@ -436,6 +469,34 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         clientMap.set(client.id, client.fullName);
       });
 
+      const uniqueProductOfferIds = [
+        ...new Set(
+          orders.flatMap((order) =>
+            order.orderDetails
+              .filter((detail) =>
+                productOfferIds.includes(detail.productOfferId),
+              )
+              .map((detail) => detail.productOfferId),
+          ),
+        ),
+      ];
+
+      const productNamePromises = uniqueProductOfferIds.map((productOfferId) =>
+        firstValueFrom(
+          this.natsClient
+            .send('product.offer.getName', productOfferId)
+            .pipe(catchError(() => of('Producto desconocido'))),
+        ),
+      );
+
+      const productNames = await Promise.all(productNamePromises);
+
+      const productNameMap = new Map<string, string>();
+      uniqueProductOfferIds.forEach((id, index) => {
+        const productName = productNames[index] as string;
+        productNameMap.set(id, productName || 'Producto desconocido');
+      });
+
       return orders.map((order) => {
         const producerOrderDetails = order.orderDetails.filter((detail) =>
           productOfferIds.includes(detail.productOfferId),
@@ -454,7 +515,12 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         return {
           ...order,
           clientName: clientMap.get(order.clientId) || 'Unknown Client',
-          orderDetails: producerOrderDetails,
+          orderDetails: producerOrderDetails.map((detail) => ({
+            ...detail,
+            productName:
+              productNameMap.get(detail.productOfferId) ||
+              'Producto desconocido',
+          })),
           totalAmount: producerTotalAmount,
           totalItems: producerTotalItems,
         };
