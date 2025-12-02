@@ -354,12 +354,6 @@ export class InventoryService {
         'minimum_threshold cannot exceed maximum_capacity',
       );
     }
-
-    if (threshold > available) {
-      throw RpcError.badRequest(
-        'minimum_threshold cannot exceed available_quantity',
-      );
-    }
   }
 
   private handleProductOfferActiveStatus(
