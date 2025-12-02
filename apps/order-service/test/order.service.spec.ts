@@ -61,6 +61,7 @@ describe('OrderService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        update: jest.fn(),
         delete: jest.fn(),
         count: jest.fn(),
       },
@@ -70,12 +71,24 @@ describe('OrderService', () => {
     Object.defineProperty(service, 'orderDetails', {
       value: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
+      },
+      writable: false,
+    });
+
+    Object.defineProperty(service, 'orderReceipt', {
+      value: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        upsert: jest.fn(),
       },
       writable: false,
     });
 
     service['logger'].log = jest.fn();
     service['logger'].error = jest.fn();
+    service['logger'].warn = jest.fn();
   });
 
   afterEach(async () => {
@@ -88,7 +101,6 @@ describe('OrderService', () => {
     it('ORDER-CP-01: should create order with multiple products and calculate totals correctly', async () => {
       const clientId = 'client-456';
       const createOrderDto = {
-        address: 'Carrera 50 #20-30',
         orderDetails: [
           {
             productOfferId: 'prod-1',
@@ -107,8 +119,12 @@ describe('OrderService', () => {
         ...mockOrder,
         id: 'order-id-456',
         clientId: 'client-456',
+        address: 'Carrera 50 #20-30',
         totalAmount: 35000,
         totalItems: 5,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        orderDate: new Date(),
         orderDetails: [
           {
             id: 'detail-1',
@@ -133,14 +149,19 @@ describe('OrderService', () => {
         ],
       };
 
-      // Mock NATS responses for product lookups
+      // Mock NATS responses: user, products, stock validation
       mockNatsClient.send
+        .mockReturnValueOnce(
+          of({ id: 'client-456', address: 'Carrera 50 #20-30' }),
+        )
         .mockReturnValueOnce(
           of({ id: 'prod-1', price: 10000, isAvailable: true, name: 'Prod 1' }),
         )
         .mockReturnValueOnce(
           of({ id: 'prod-2', price: 5000, isAvailable: true, name: 'Prod 2' }),
-        );
+        )
+        .mockReturnValueOnce(of(true))
+        .mockReturnValueOnce(of(true));
 
       (service['order'].create as jest.Mock).mockResolvedValue(
         mockOrderMultiple,
@@ -187,7 +208,6 @@ describe('OrderService', () => {
     it('ORDER-CP-02: should always create order with PENDING status', async () => {
       const clientId = 'client-789';
       const createOrderDto = {
-        address: 'Avenida 80 #100-50',
         orderDetails: [
           {
             productOfferId: 'prod-1',
@@ -200,12 +220,20 @@ describe('OrderService', () => {
       const mockOrderCreated = {
         ...mockOrder,
         id: 'order-id-789',
+        clientId: 'client-789',
+        address: 'Avenida 80 #100-50',
         status: OrderStatus.PENDING,
       };
 
-      mockNatsClient.send.mockReturnValue(
-        of({ id: 'prod-1', price: 10000, isAvailable: true }),
-      );
+      mockNatsClient.send
+        .mockReturnValueOnce(
+          of({ id: 'client-789', address: 'Avenida 80 #100-50' }),
+        )
+        .mockReturnValueOnce(
+          of({ id: 'prod-1', price: 10000, isAvailable: true }),
+        )
+        .mockReturnValueOnce(of(true));
+
       (service['order'].create as jest.Mock).mockResolvedValue(
         mockOrderCreated,
       );
@@ -226,7 +254,6 @@ describe('OrderService', () => {
     it('ORDER-CP-03: should throw BAD_REQUEST when products do not exist', async () => {
       const clientId = 'client-123';
       const createOrderDto = {
-        address: 'Calle 50 #10-20',
         orderDetails: [
           {
             productOfferId: 'invalid-prod-id',
@@ -236,22 +263,22 @@ describe('OrderService', () => {
         ],
       };
 
-      mockNatsClient.send.mockReturnValue(of(null));
-
-      await expect(service.create(clientId, createOrderDto)).rejects.toThrow(
-        RpcException,
-      );
+      mockNatsClient.send
+        .mockReturnValueOnce(
+          of({ id: 'client-123', address: 'Calle 50 #10-20' }),
+        )
+        .mockReturnValueOnce(of(null));
 
       try {
         await service.create(clientId, createOrderDto);
+        fail('Should have thrown RpcException');
       } catch (error) {
         expect(error).toBeInstanceOf(RpcException);
-        expect(error.getError()).toEqual({
+        const errorData = (error as RpcException).getError();
+        expect(errorData).toMatchObject({
           status: HttpStatus.BAD_REQUEST,
-          message: expect.stringContaining(
-            'Los siguientes productos no existen',
-          ),
         });
+        expect((errorData as any).message).toContain('Products not found');
       }
 
       expect(service['order'].create).not.toHaveBeenCalled();
@@ -290,7 +317,6 @@ describe('OrderService', () => {
     it('ORDER-CP-05: should throw BAD_REQUEST when quantity is zero', async () => {
       const clientId = 'client-123';
       const createOrderDto = {
-        address: 'Calle 123 #45-67',
         orderDetails: [
           {
             productOfferId: 'prod-1',
@@ -300,29 +326,29 @@ describe('OrderService', () => {
         ],
       };
 
-      await expect(service.create(clientId, createOrderDto)).rejects.toThrow(
-        RpcException,
+      mockNatsClient.send.mockReturnValueOnce(
+        of({ id: 'client-123', address: 'Calle 123 #45-67' }),
       );
 
       try {
         await service.create(clientId, createOrderDto);
+        fail('Should have thrown RpcException');
       } catch (error) {
         expect(error).toBeInstanceOf(RpcException);
-        expect(error.getError()).toEqual({
+        const errorData = (error as RpcException).getError();
+        expect(errorData).toEqual({
           status: HttpStatus.BAD_REQUEST,
           message: 'Quantity must be greater than zero',
         });
       }
 
       expect(service['order'].create).not.toHaveBeenCalled();
-      expect(mockNatsClient.send).not.toHaveBeenCalled();
     });
 
     // ORDER-CP-06
     it('ORDER-CP-06: should throw BAD_REQUEST when quantity is negative', async () => {
       const clientId = 'client-123';
       const createOrderDto = {
-        address: 'Calle 123 #45-67',
         orderDetails: [
           {
             productOfferId: 'prod-1',
@@ -332,22 +358,23 @@ describe('OrderService', () => {
         ],
       };
 
-      await expect(service.create(clientId, createOrderDto)).rejects.toThrow(
-        RpcException,
+      mockNatsClient.send.mockReturnValueOnce(
+        of({ id: 'client-123', address: 'Calle 123 #45-67' }),
       );
 
       try {
         await service.create(clientId, createOrderDto);
+        fail('Should have thrown RpcException');
       } catch (error) {
         expect(error).toBeInstanceOf(RpcException);
-        expect(error.getError()).toEqual({
+        const errorData = (error as RpcException).getError();
+        expect(errorData).toEqual({
           status: HttpStatus.BAD_REQUEST,
           message: 'Quantity must be greater than zero',
         });
       }
 
       expect(service['order'].create).not.toHaveBeenCalled();
-      expect(mockNatsClient.send).not.toHaveBeenCalled();
     });
   });
 
@@ -575,12 +602,15 @@ describe('OrderService', () => {
         mockClientOrders,
       );
 
+      mockNatsClient.send.mockReturnValue(of('Producto Test'));
+
       const result = await service.findByClientId('client-123');
 
       expect(service['order'].findMany).toHaveBeenCalledWith({
         where: { clientId: 'client-123' },
         include: {
           orderDetails: true,
+          orderReceipt: true,
         },
         orderBy: { orderDate: 'desc' },
       });
@@ -601,6 +631,7 @@ describe('OrderService', () => {
         where: { clientId: 'client-sin-ordenes' },
         include: {
           orderDetails: true,
+          orderReceipt: true,
         },
         orderBy: { orderDate: 'desc' },
       });
@@ -742,7 +773,9 @@ describe('OrderService', () => {
       mockNatsClient.send
         .mockReturnValueOnce(of(mockProductOffers))
         .mockReturnValueOnce(of(mockClients[0]))
-        .mockReturnValueOnce(of(mockClients[1]));
+        .mockReturnValueOnce(of(mockClients[1]))
+        .mockReturnValueOnce(of('Producto 1'))
+        .mockReturnValueOnce(of('Producto 2'));
 
       (service['order'].findMany as jest.Mock).mockResolvedValue(mockOrders);
 
@@ -862,7 +895,8 @@ describe('OrderService', () => {
 
       mockNatsClient.send
         .mockReturnValueOnce(of(mockProductOffers))
-        .mockReturnValueOnce(of({ id: 'client-1', fullName: 'Test Client' }));
+        .mockReturnValueOnce(of({ id: 'client-1', fullName: 'Test Client' }))
+        .mockReturnValueOnce(of('Producto Test'));
 
       (service['order'].findMany as jest.Mock).mockResolvedValue([
         mockOrderWithMixedProducts,
@@ -904,7 +938,8 @@ describe('OrderService', () => {
 
       mockNatsClient.send
         .mockReturnValueOnce(of(mockProductOffers))
-        .mockReturnValueOnce(throwError(() => new Error('Client not found')));
+        .mockReturnValueOnce(throwError(() => new Error('Client not found')))
+        .mockReturnValueOnce(of('Producto Test'));
 
       (service['order'].findMany as jest.Mock).mockResolvedValue([
         mockOrderWithError,
@@ -962,7 +997,8 @@ describe('OrderService', () => {
 
       mockNatsClient.send
         .mockReturnValueOnce(of(mockProductOffers))
-        .mockReturnValueOnce(of({ id: 'client-1', fullName: 'Test Client' }));
+        .mockReturnValueOnce(of({ id: 'client-1', fullName: 'Test Client' }))
+        .mockReturnValueOnce(of('Producto Test'));
 
       (service['order'].findMany as jest.Mock).mockResolvedValue([
         mockOrders[0],
@@ -979,6 +1015,1314 @@ describe('OrderService', () => {
       );
       expect(result).toHaveLength(1);
       expect(result[0].status).toBe(OrderStatus.PAID);
+    });
+  });
+
+  describe('create - Additional Tests', () => {
+    // ORDER-CP-07
+    it('ORDER-CP-07: should obtain address automatically from user profile', async () => {
+      const clientId = 'client-123';
+      const createOrderDto = {
+        orderDetails: [
+          {
+            productOfferId: 'prod-1',
+            quantity: 2,
+            price: 10000,
+          },
+        ],
+      };
+
+      const mockUser = {
+        id: 'client-123',
+        address: 'Calle Automática #123-45',
+        fullName: 'Test User',
+      };
+
+      const mockOrderCreated = {
+        ...mockOrder,
+        address: 'Calle Automática #123-45',
+      };
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockUser))
+        .mockReturnValueOnce(
+          of({ id: 'prod-1', price: 10000, isAvailable: true, name: 'Prod 1' }),
+        )
+        .mockReturnValueOnce(of(true));
+
+      (service['order'].create as jest.Mock).mockResolvedValue(
+        mockOrderCreated,
+      );
+
+      const result = await service.create(clientId, createOrderDto);
+
+      expect(mockNatsClient.send).toHaveBeenCalledWith(
+        'auth.get.user',
+        clientId,
+      );
+      expect(result.address).toBe('Calle Automática #123-45');
+      expect(service['order'].create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            address: 'Calle Automática #123-45',
+          }),
+        }),
+      );
+    });
+
+    // ORDER-CP-07a
+    it('ORDER-CP-07a: should throw error when user has no address registered', async () => {
+      const clientId = 'client-123';
+      const createOrderDto = {
+        orderDetails: [
+          {
+            productOfferId: 'prod-1',
+            quantity: 2,
+            price: 10000,
+          },
+        ],
+      };
+
+      const mockUser = {
+        id: 'client-123',
+        address: '',
+        fullName: 'Test User',
+      };
+
+      mockNatsClient.send.mockReturnValueOnce(of(mockUser)); // auth.get.user
+
+      try {
+        await service.create(clientId, createOrderDto);
+        fail('Should have thrown RpcException');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        const errorData = (error as RpcException).getError();
+        expect(errorData).toEqual({
+          status: HttpStatus.BAD_REQUEST,
+          message: 'You must have an address to create an order',
+        });
+      }
+
+      expect(service['order'].create).not.toHaveBeenCalled();
+    });
+
+    // ORDER-CP-07b
+    it('ORDER-CP-07b: should throw BAD_REQUEST when product is not available', async () => {
+      const clientId = 'client-123';
+      const createOrderDto = {
+        orderDetails: [
+          {
+            productOfferId: 'prod-1',
+            quantity: 2,
+            price: 10000,
+          },
+        ],
+      };
+
+      const mockUser = {
+        id: 'client-123',
+        address: 'Calle 123',
+      };
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockUser)) // auth.get.user
+        .mockReturnValueOnce(
+          of({
+            id: 'prod-1',
+            price: 10000,
+            isAvailable: false,
+            name: 'Prod 1',
+          }),
+        ); // product.offer.findOne
+
+      try {
+        await service.create(clientId, createOrderDto);
+        fail('Should have thrown RpcException');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        const errorData = (error as RpcException).getError();
+        expect(errorData).toMatchObject({
+          status: HttpStatus.BAD_REQUEST,
+        });
+        expect((errorData as any).message).toContain('not available for sale');
+      }
+
+      expect(service['order'].create).not.toHaveBeenCalled();
+    });
+
+    // ORDER-CP-07c
+    it('ORDER-CP-07c: should validate stock before creating order', async () => {
+      const clientId = 'client-123';
+      const createOrderDto = {
+        orderDetails: [
+          {
+            productOfferId: 'prod-1',
+            quantity: 10,
+            price: 10000,
+          },
+        ],
+      };
+
+      const mockUser = {
+        id: 'client-123',
+        address: 'Calle 123',
+      };
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockUser)) // auth.get.user
+        .mockReturnValueOnce(
+          of({ id: 'prod-1', price: 10000, isAvailable: true, name: 'Prod 1' }),
+        ) // product.offer.findOne
+        .mockReturnValueOnce(of(false)); // inventory.validateStock - No hay stock
+
+      try {
+        await service.create(clientId, createOrderDto);
+        fail('Should have thrown RpcException');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        const errorData = (error as RpcException).getError();
+        expect(errorData).toMatchObject({
+          status: HttpStatus.BAD_REQUEST,
+        });
+        expect((errorData as any).message).toContain('Stock insuficiente');
+      }
+
+      expect(service['order'].create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findByClientId - Additional Tests', () => {
+    // ORDER-CP-16a
+    it('ORDER-CP-16a: should include productName in each orderDetail', async () => {
+      const mockClientOrders = [
+        {
+          ...mockOrder,
+          id: 'order-1',
+          clientId: 'client-123',
+          orderDetails: [
+            {
+              id: 'detail-1',
+              orderId: 'order-1',
+              productOfferId: 'prod-1',
+              quantity: 2,
+              price: 10000,
+              subtotal: 20000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+          orderReceipt: null,
+        },
+      ];
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue(
+        mockClientOrders,
+      );
+      mockNatsClient.send.mockReturnValue(of('Producto Test'));
+
+      const result = await service.findByClientId('client-123');
+
+      expect(result[0].orderDetails[0]).toHaveProperty('productName');
+      expect(result[0].orderDetails[0].productName).toBe('Producto Test');
+    });
+
+    // ORDER-CP-16b
+    it('ORDER-CP-16b: should use "Producto desconocido" when product name cannot be fetched', async () => {
+      const mockClientOrders = [
+        {
+          ...mockOrder,
+          id: 'order-1',
+          clientId: 'client-123',
+          orderDetails: [
+            {
+              id: 'detail-1',
+              orderId: 'order-1',
+              productOfferId: 'prod-1',
+              quantity: 2,
+              price: 10000,
+              subtotal: 20000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+          orderReceipt: null,
+        },
+      ];
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue(
+        mockClientOrders,
+      );
+      mockNatsClient.send.mockReturnValue(
+        throwError(() => new Error('Product not found')),
+      );
+
+      const result = await service.findByClientId('client-123');
+
+      expect(result[0].orderDetails[0].productName).toBe(
+        'Producto desconocido',
+      );
+    });
+
+    // ORDER-CP-16c
+    it('ORDER-CP-16c: should include orderReceipt when order is paid', async () => {
+      const mockClientOrders = [
+        {
+          ...mockOrder,
+          id: 'order-1',
+          clientId: 'client-123',
+          status: OrderStatus.PAID,
+          orderReceipt: {
+            id: 'receipt-1',
+            orderId: 'order-1',
+            receiptUrl: 'https://stripe.com/receipt',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        },
+      ];
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue(
+        mockClientOrders,
+      );
+      mockNatsClient.send.mockReturnValue(of('Producto Test'));
+
+      const result = await service.findByClientId('client-123');
+
+      expect(result[0].orderReceipt).toBeDefined();
+      expect(result[0].orderReceipt?.receiptUrl).toBe(
+        'https://stripe.com/receipt',
+      );
+    });
+  });
+
+  describe('findByProducerId - Additional Tests', () => {
+    // ORDER-CP-20a
+    it('ORDER-CP-20a: should include productName in each orderDetail', async () => {
+      const producerId = 'producer-123';
+      const mockProductOffers = [
+        { id: 'prod-offer-1', producerId: 'producer-123' },
+      ];
+      const mockOrders = [
+        {
+          ...mockOrder,
+          id: 'order-1',
+          status: OrderStatus.PAID,
+          orderDetails: [
+            {
+              id: 'detail-1',
+              orderId: 'order-1',
+              productOfferId: 'prod-offer-1',
+              quantity: 2,
+              price: 10000,
+              subtotal: 20000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        },
+      ];
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockProductOffers))
+        .mockReturnValueOnce(of({ id: 'client-1', fullName: 'Test Client' }))
+        .mockReturnValueOnce(of('Producto Test'));
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue(mockOrders);
+
+      const result = await service.findByProducerId(producerId);
+
+      expect(result[0].orderDetails[0]).toHaveProperty('productName');
+      expect(result[0].orderDetails[0].productName).toBe('Producto Test');
+    });
+
+    // ORDER-CP-20b
+    it('ORDER-CP-20b: should calculate totalAmount only with producer products', async () => {
+      const producerId = 'producer-123';
+      const mockProductOffers = [
+        { id: 'prod-offer-1', producerId: 'producer-123' },
+      ];
+      const mockOrders = [
+        {
+          ...mockOrder,
+          id: 'order-1',
+          status: OrderStatus.PAID,
+          totalAmount: 50000, // Total de toda la orden
+          orderDetails: [
+            {
+              id: 'detail-1',
+              orderId: 'order-1',
+              productOfferId: 'prod-offer-1',
+              quantity: 2,
+              price: 10000,
+              subtotal: 20000, // Solo del productor
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+            {
+              id: 'detail-2',
+              orderId: 'order-1',
+              productOfferId: 'other-prod',
+              quantity: 3,
+              price: 10000,
+              subtotal: 30000, // De otro productor
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        },
+      ];
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockProductOffers))
+        .mockReturnValueOnce(of({ id: 'client-1', fullName: 'Test Client' }))
+        .mockReturnValueOnce(of('Producto Test'));
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue(mockOrders);
+
+      const result = await service.findByProducerId(producerId);
+
+      expect(result[0].totalAmount).toBe(20000); // Solo productos del productor
+      expect(result[0].totalAmount).not.toBe(50000);
+    });
+
+    // ORDER-CP-20c
+    it('ORDER-CP-20c: should calculate totalItems only with producer products', async () => {
+      const producerId = 'producer-123';
+      const mockProductOffers = [
+        { id: 'prod-offer-1', producerId: 'producer-123' },
+      ];
+      const mockOrders = [
+        {
+          ...mockOrder,
+          id: 'order-1',
+          status: OrderStatus.PAID,
+          totalItems: 5, // Total de toda la orden
+          orderDetails: [
+            {
+              id: 'detail-1',
+              orderId: 'order-1',
+              productOfferId: 'prod-offer-1',
+              quantity: 2, // Solo del productor
+              price: 10000,
+              subtotal: 20000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+            {
+              id: 'detail-2',
+              orderId: 'order-1',
+              productOfferId: 'other-prod',
+              quantity: 3, // De otro productor
+              price: 10000,
+              subtotal: 30000,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        },
+      ];
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of(mockProductOffers))
+        .mockReturnValueOnce(of({ id: 'client-1', fullName: 'Test Client' }))
+        .mockReturnValueOnce(of('Producto Test'));
+
+      (service['order'].findMany as jest.Mock).mockResolvedValue(mockOrders);
+
+      const result = await service.findByProducerId(producerId);
+
+      expect(result[0].totalItems).toBe(2); // Solo productos del productor
+      expect(result[0].totalItems).not.toBe(5);
+    });
+  });
+
+  describe('cancelOrder', () => {
+    // ORDER-CP-26
+    it('ORDER-CP-26: should cancel order successfully when PENDING and owned by client', async () => {
+      const orderId = 'order-123';
+      const clientId = 'client-123';
+      const mockPendingOrder = {
+        ...mockOrder,
+        id: orderId,
+        clientId: clientId,
+        status: OrderStatus.PENDING,
+      };
+
+      const mockCancelledOrder = {
+        ...mockPendingOrder,
+        status: OrderStatus.CANCELLED,
+      };
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(
+        mockPendingOrder,
+      );
+      (service['order'].update as jest.Mock).mockResolvedValue(
+        mockCancelledOrder,
+      );
+
+      const result = await service.cancelOrder(orderId, clientId);
+
+      expect(service['order'].update).toHaveBeenCalledWith({
+        where: { id: orderId },
+        data: { status: 'CANCELLED' },
+        include: { orderDetails: true },
+      });
+      expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(mockNatsClient.emit).toHaveBeenCalled();
+    });
+
+    // ORDER-CP-27
+    it('ORDER-CP-27: should throw NOT_FOUND when order does not exist', async () => {
+      const orderId = 'invalid-order';
+      const clientId = 'client-123';
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.cancelOrder(orderId, clientId)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.cancelOrder(orderId, clientId);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.NOT_FOUND,
+          message: "Order with id 'invalid-order' not found",
+        });
+      }
+
+      expect(service['order'].update).not.toHaveBeenCalled();
+    });
+
+    // ORDER-CP-28
+    it('ORDER-CP-28: should throw FORBIDDEN when client is not owner', async () => {
+      const orderId = 'order-123';
+      const clientId = 'client-123';
+      const mockOtherOrder = {
+        ...mockOrder,
+        id: orderId,
+        clientId: 'other-client',
+        status: OrderStatus.PENDING,
+      };
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(
+        mockOtherOrder,
+      );
+
+      await expect(service.cancelOrder(orderId, clientId)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.cancelOrder(orderId, clientId);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.FORBIDDEN,
+          message: 'You can only cancel your own orders',
+        });
+      }
+
+      expect(service['order'].update).not.toHaveBeenCalled();
+    });
+
+    // ORDER-CP-29
+    it('ORDER-CP-29: should throw BAD_REQUEST when order is not PENDING', async () => {
+      const orderId = 'order-123';
+      const clientId = 'client-123';
+      const mockPaidOrder = {
+        ...mockOrder,
+        id: orderId,
+        clientId: clientId,
+        status: OrderStatus.PAID,
+      };
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(
+        mockPaidOrder,
+      );
+
+      await expect(service.cancelOrder(orderId, clientId)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.cancelOrder(orderId, clientId);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.BAD_REQUEST,
+          message: expect.stringContaining(
+            'Only PENDING orders can be cancelled',
+          ),
+        });
+      }
+
+      expect(service['order'].update).not.toHaveBeenCalled();
+    });
+
+    // ORDER-CP-30
+    it('ORDER-CP-30: should emit order.cancelled event with orderId, productOfferId and quantity', async () => {
+      const orderId = 'order-123';
+      const clientId = 'client-123';
+      const mockPendingOrder = {
+        ...mockOrder,
+        id: orderId,
+        clientId: clientId,
+        status: OrderStatus.PENDING,
+        orderDetails: [
+          {
+            id: 'detail-1',
+            orderId: orderId,
+            productOfferId: 'prod-1',
+            quantity: 2,
+            price: 10000,
+            subtotal: 20000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      const mockCancelledOrder = {
+        ...mockPendingOrder,
+        status: OrderStatus.CANCELLED,
+      };
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(
+        mockPendingOrder,
+      );
+      (service['order'].update as jest.Mock).mockResolvedValue(
+        mockCancelledOrder,
+      );
+
+      await service.cancelOrder(orderId, clientId);
+
+      expect(mockNatsClient.emit).toHaveBeenCalledWith('order.cancelled', {
+        orderId: orderId,
+        productOfferId: 'prod-1',
+        quantity: 2,
+      });
+    });
+
+    // ORDER-CP-31
+    it('ORDER-CP-31: should change status to CANCELLED after canceling', async () => {
+      const orderId = 'order-123';
+      const clientId = 'client-123';
+      const mockPendingOrder = {
+        ...mockOrder,
+        id: orderId,
+        clientId: clientId,
+        status: OrderStatus.PENDING,
+      };
+
+      const mockCancelledOrder = {
+        ...mockPendingOrder,
+        status: OrderStatus.CANCELLED,
+      };
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(
+        mockPendingOrder,
+      );
+      (service['order'].update as jest.Mock).mockResolvedValue(
+        mockCancelledOrder,
+      );
+
+      const result = await service.cancelOrder(orderId, clientId);
+
+      expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(result.status).not.toBe(OrderStatus.PENDING);
+    });
+  });
+
+  describe('paidOrder', () => {
+    // ORDER-CP-32
+    it('ORDER-CP-32: should update order to PAID when payment is received', async () => {
+      const paidOrderDto = {
+        orderId: 'order-123',
+        stripePaymentId: 'stripe-123',
+        receiptUrl: 'https://stripe.com/receipt',
+      };
+
+      const mockPaidOrder = {
+        ...mockOrder,
+        id: 'order-123',
+        status: OrderStatus.PAID,
+        paid: true,
+        paidAt: new Date(),
+        stripeChargeId: 'stripe-123',
+        orderDetails: mockOrder.orderDetails,
+      };
+
+      (service['order'].update as jest.Mock).mockResolvedValue(mockPaidOrder);
+      mockNatsClient.send.mockReturnValue(of(null));
+
+      await service.paidOrder(paidOrderDto);
+
+      expect(service['order'].update).toHaveBeenCalledWith({
+        where: { id: paidOrderDto.orderId },
+        data: expect.objectContaining({
+          status: 'PAID',
+          paid: true,
+          paidAt: expect.any(Date),
+          stripeChargeId: 'stripe-123',
+        }),
+        include: {
+          orderDetails: true,
+        },
+      });
+    });
+
+    // ORDER-CP-33
+    it('ORDER-CP-33: should save stripeChargeId and paidAt in order', async () => {
+      const paidOrderDto = {
+        orderId: 'order-123',
+        stripePaymentId: 'stripe-456',
+        receiptUrl: 'https://stripe.com/receipt',
+      };
+
+      const mockPaidOrder = {
+        ...mockOrder,
+        id: 'order-123',
+        status: OrderStatus.PAID,
+        paid: true,
+        paidAt: new Date('2024-01-01'),
+        stripeChargeId: 'stripe-456',
+        orderDetails: mockOrder.orderDetails,
+      };
+
+      (service['order'].update as jest.Mock).mockResolvedValue(mockPaidOrder);
+      mockNatsClient.send.mockReturnValue(of(null));
+
+      await service.paidOrder(paidOrderDto);
+
+      expect(service['order'].update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            stripeChargeId: 'stripe-456',
+            paidAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    // ORDER-CP-34
+    it('ORDER-CP-34: should create orderReceipt with receiptUrl', async () => {
+      const paidOrderDto = {
+        orderId: 'order-123',
+        stripePaymentId: 'stripe-123',
+        receiptUrl: 'https://stripe.com/receipt/123',
+      };
+
+      const mockPaidOrder = {
+        ...mockOrder,
+        id: 'order-123',
+        status: OrderStatus.PAID,
+        orderDetails: mockOrder.orderDetails,
+      };
+
+      (service['order'].update as jest.Mock).mockResolvedValue(mockPaidOrder);
+      mockNatsClient.send.mockReturnValue(of(null));
+
+      await service.paidOrder(paidOrderDto);
+
+      expect(service['order'].update).toHaveBeenCalledWith({
+        where: { id: paidOrderDto.orderId },
+        data: expect.objectContaining({
+          orderReceipt: {
+            create: {
+              receiptUrl: 'https://stripe.com/receipt/123',
+            },
+          },
+        }),
+        include: {
+          orderDetails: true,
+        },
+      });
+    });
+
+    // ORDER-CP-35
+    it('ORDER-CP-35: should emit order.confirmed event for each orderDetail', async () => {
+      const paidOrderDto = {
+        orderId: 'order-123',
+        stripePaymentId: 'stripe-123',
+        receiptUrl: 'https://stripe.com/receipt',
+      };
+
+      const mockPaidOrder = {
+        ...mockOrder,
+        id: 'order-123',
+        status: OrderStatus.PAID,
+        orderDetails: [
+          {
+            id: 'detail-1',
+            orderId: 'order-123',
+            productOfferId: 'prod-1',
+            quantity: 2,
+            price: 10000,
+            subtotal: 20000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          {
+            id: 'detail-2',
+            orderId: 'order-123',
+            productOfferId: 'prod-2',
+            quantity: 3,
+            price: 5000,
+            subtotal: 15000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      (service['order'].update as jest.Mock).mockResolvedValue(mockPaidOrder);
+      mockNatsClient.send.mockReturnValue(of(null));
+
+      await service.paidOrder(paidOrderDto);
+
+      expect(mockNatsClient.emit).toHaveBeenCalledWith('order.confirmed', {
+        productOfferId: 'prod-1',
+        quantity: 2,
+      });
+      expect(mockNatsClient.emit).toHaveBeenCalledWith('order.confirmed', {
+        productOfferId: 'prod-2',
+        quantity: 3,
+      });
+      expect(mockNatsClient.emit).toHaveBeenCalledTimes(2);
+    });
+
+    // ORDER-CP-36
+    it('ORDER-CP-36: should call notifyProducers after updating order', async () => {
+      const paidOrderDto = {
+        orderId: 'order-123',
+        stripePaymentId: 'stripe-123',
+        receiptUrl: 'https://stripe.com/receipt',
+      };
+
+      const mockPaidOrder = {
+        ...mockOrder,
+        id: 'order-123',
+        clientId: 'client-123',
+        status: OrderStatus.PAID,
+        orderDetails: mockOrder.orderDetails,
+      };
+
+      (service['order'].update as jest.Mock).mockResolvedValue(mockPaidOrder);
+      mockNatsClient.send
+        .mockReturnValueOnce(of('producer-1')) // product.offer.getProducerId
+        .mockReturnValueOnce(of({ id: 'client-123', fullName: 'Test Client' })); // auth.get.user
+
+      await service.paidOrder(paidOrderDto);
+
+      // Verificar que se emiten ambos eventos
+      // Primero se emite order.confirmed para cada detail
+      expect(mockNatsClient.emit).toHaveBeenCalledWith('order.confirmed', {
+        productOfferId: 'prod-1',
+        quantity: 2,
+      });
+      // notifyProducers se ejecuta de forma asíncrona con .catch(), así que esperamos
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(mockNatsClient.emit).toHaveBeenCalledWith(
+        'notification.order.created',
+        expect.objectContaining({
+          orderId: 'order-123',
+          producerIds: ['producer-1'],
+        }),
+      );
+    });
+
+    // ORDER-CP-38
+    it('ORDER-CP-38: should throw INTERNAL_SERVER_ERROR if processing fails', async () => {
+      const paidOrderDto = {
+        orderId: 'order-123',
+        stripePaymentId: 'stripe-123',
+        receiptUrl: 'https://stripe.com/receipt',
+      };
+
+      const dbError = new Error('Database error');
+      (service['order'].update as jest.Mock).mockRejectedValue(dbError);
+
+      await expect(service.paidOrder(paidOrderDto)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.paidOrder(paidOrderDto);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: 'Failed to process paid order',
+        });
+      }
+
+      expect(service['logger'].error).toHaveBeenCalled();
+    });
+  });
+
+  describe('updateStatus', () => {
+    // ORDER-CP-39
+    it('ORDER-CP-39: should update order status successfully', async () => {
+      const updateStatusDto = {
+        orderId: 'order-123',
+        status: OrderStatus.DELIVERED,
+      };
+
+      const mockExistingOrder = {
+        ...mockOrder,
+        id: 'order-123',
+        status: OrderStatus.PAID,
+      };
+
+      const mockUpdatedOrder = {
+        ...mockExistingOrder,
+        status: OrderStatus.DELIVERED,
+        orderDetails: mockExistingOrder.orderDetails,
+      };
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(
+        mockExistingOrder,
+      );
+      (service['order'].update as jest.Mock).mockResolvedValue(
+        mockUpdatedOrder,
+      );
+
+      const result = await service.updateStatus(updateStatusDto);
+
+      expect(service['order'].update).toHaveBeenCalledWith({
+        where: { id: 'order-123' },
+        data: { status: OrderStatus.DELIVERED },
+        include: { orderDetails: true },
+      });
+      expect(result.status).toBe(OrderStatus.DELIVERED);
+    });
+
+    // ORDER-CP-40
+    it('ORDER-CP-40: should do nothing if status is the same', async () => {
+      const updateStatusDto = {
+        orderId: 'order-123',
+        status: OrderStatus.PAID,
+      };
+
+      const mockExistingOrder = {
+        ...mockOrder,
+        id: 'order-123',
+        status: OrderStatus.PAID,
+      };
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(
+        mockExistingOrder,
+      );
+
+      const result = await service.updateStatus(updateStatusDto);
+
+      expect(service['order'].update).not.toHaveBeenCalled();
+      expect(result).toEqual(mockExistingOrder);
+    });
+
+    // ORDER-CP-41
+    it('ORDER-CP-41: should emit events according to new status', async () => {
+      const updateStatusDto = {
+        orderId: 'order-123',
+        status: OrderStatus.CANCELLED,
+      };
+
+      const mockExistingOrder = {
+        ...mockOrder,
+        id: 'order-123',
+        status: OrderStatus.PENDING,
+        orderDetails: [
+          {
+            id: 'detail-1',
+            orderId: 'order-123',
+            productOfferId: 'prod-1',
+            quantity: 2,
+            price: 10000,
+            subtotal: 20000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      const mockUpdatedOrder = {
+        ...mockExistingOrder,
+        status: OrderStatus.CANCELLED,
+      };
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(
+        mockExistingOrder,
+      );
+      (service['order'].update as jest.Mock).mockResolvedValue(
+        mockUpdatedOrder,
+      );
+
+      await service.updateStatus(updateStatusDto);
+
+      expect(mockNatsClient.emit).toHaveBeenCalledWith('order.cancelled', {
+        productOfferId: 'prod-1',
+        quantity: 2,
+      });
+    });
+
+    // ORDER-CP-42
+    it('ORDER-CP-42: should throw NOT_FOUND if order does not exist', async () => {
+      const updateStatusDto = {
+        orderId: 'invalid-order',
+        status: OrderStatus.DELIVERED,
+      };
+
+      (service['order'].findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.updateStatus(updateStatusDto)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.updateStatus(updateStatusDto);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.NOT_FOUND,
+          message: "Order with id 'invalid-order' not found",
+        });
+      }
+    });
+  });
+
+  describe('createPaymentSession', () => {
+    // ORDER-CP-43
+    it('ORDER-CP-43: should create payment session with product names', async () => {
+      const mockOrderForPayment = {
+        ...mockOrder,
+        id: 'order-123',
+        orderDetails: [
+          {
+            id: 'detail-1',
+            orderId: 'order-123',
+            productOfferId: 'prod-1',
+            quantity: 2,
+            price: 10000,
+            subtotal: 20000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      const mockPaymentSession = {
+        id: 'session-123',
+        url: 'https://stripe.com/checkout',
+      };
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of('Producto Test'))
+        .mockReturnValueOnce(of(mockPaymentSession));
+
+      const result = await service.createPaymentSession(
+        mockOrderForPayment as any,
+      );
+
+      expect(mockNatsClient.send).toHaveBeenCalledWith(
+        'product.offer.getName',
+        'prod-1',
+      );
+      expect(mockNatsClient.send).toHaveBeenCalledWith(
+        'create.payment.session',
+        {
+          orderId: 'order-123',
+          currency: 'COP',
+          items: [
+            {
+              name: 'Producto Test',
+              price: 10000,
+              quantity: 2,
+            },
+          ],
+        },
+      );
+      expect(result).toEqual(mockPaymentSession);
+    });
+
+    // ORDER-CP-44
+    it('ORDER-CP-44: should get product names from Product Service', async () => {
+      const mockOrderForPayment = {
+        ...mockOrder,
+        id: 'order-123',
+        orderDetails: [
+          {
+            id: 'detail-1',
+            orderId: 'order-123',
+            productOfferId: 'prod-1',
+            quantity: 1,
+            price: 10000,
+            subtotal: 10000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of('Arroz Orgánico'))
+        .mockReturnValueOnce(of({ id: 'session-123' }));
+
+      await service.createPaymentSession(mockOrderForPayment as any);
+
+      expect(mockNatsClient.send).toHaveBeenCalledWith(
+        'product.offer.getName',
+        'prod-1',
+      );
+    });
+
+    // ORDER-CP-45
+    it('ORDER-CP-45: should use "Producto sin nombre" if name cannot be obtained', async () => {
+      const mockOrderForPayment = {
+        ...mockOrder,
+        id: 'order-123',
+        orderDetails: [
+          {
+            id: 'detail-1',
+            orderId: 'order-123',
+            productOfferId: 'prod-1',
+            quantity: 1,
+            price: 10000,
+            subtotal: 10000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      // El servicio no usa catchError, así que si falla, lanzará error
+      // Pero el código usa || 'Producto sin nombre', así que null debería funcionar
+      mockNatsClient.send
+        .mockReturnValueOnce(of(null)) // product.offer.getName returns null
+        .mockReturnValueOnce(of({ id: 'session-123' }));
+
+      await service.createPaymentSession(mockOrderForPayment as any);
+
+      expect(mockNatsClient.send).toHaveBeenCalledWith(
+        'create.payment.session',
+        expect.objectContaining({
+          items: [
+            expect.objectContaining({
+              name: 'Producto sin nombre',
+            }),
+          ],
+        }),
+      );
+
+      expect(mockNatsClient.send).toHaveBeenCalledWith(
+        'create.payment.session',
+        {
+          orderId: 'order-123',
+          currency: 'COP',
+          items: [
+            {
+              name: 'Producto sin nombre',
+              price: 10000,
+              quantity: 1,
+            },
+          ],
+        },
+      );
+    });
+
+    // ORDER-CP-46
+    it('ORDER-CP-46: should send items with name, price and quantity to Payment Service', async () => {
+      const mockOrderForPayment = {
+        ...mockOrder,
+        id: 'order-123',
+        orderDetails: [
+          {
+            id: 'detail-1',
+            orderId: 'order-123',
+            productOfferId: 'prod-1',
+            quantity: 3,
+            price: 15000,
+            subtotal: 45000,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
+      };
+
+      mockNatsClient.send
+        .mockReturnValueOnce(of('Producto Test'))
+        .mockReturnValueOnce(of({ id: 'session-123' }));
+
+      await service.createPaymentSession(mockOrderForPayment as any);
+
+      expect(mockNatsClient.send).toHaveBeenCalledWith(
+        'create.payment.session',
+        {
+          orderId: 'order-123',
+          currency: 'COP',
+          items: [
+            {
+              name: 'Producto Test',
+              price: 15000,
+              quantity: 3,
+            },
+          ],
+        },
+      );
+    });
+  });
+
+  describe('existsProductOffer', () => {
+    // ORDER-CP-48
+    it('ORDER-CP-48: should return true if product exists in any order', async () => {
+      const productOfferId = 'prod-1';
+      const mockOrderDetail = {
+        id: 'detail-1',
+        orderId: 'order-123',
+        productOfferId: 'prod-1',
+        quantity: 2,
+        price: 10000,
+        subtotal: 20000,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      (service['orderDetails'].findFirst as jest.Mock).mockResolvedValue(
+        mockOrderDetail,
+      );
+
+      const result = await service.existsProductOffer(productOfferId);
+
+      expect(service['orderDetails'].findFirst).toHaveBeenCalledWith({
+        where: { productOfferId },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(result).toBe(true);
+    });
+
+    // ORDER-CP-49
+    it('ORDER-CP-49: should return false if product does not exist in any order', async () => {
+      const productOfferId = 'prod-nonexistent';
+
+      (service['orderDetails'].findFirst as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.existsProductOffer(productOfferId);
+
+      expect(result).toBe(false);
+    });
+
+    // ORDER-CP-50
+    it('ORDER-CP-50: should return false if productOfferId is null or empty', async () => {
+      const result1 = await service.existsProductOffer('');
+      const result2 = await service.existsProductOffer(
+        null as unknown as string,
+      );
+
+      expect(result1).toBe(false);
+      expect(result2).toBe(false);
+      expect(service['logger'].warn).toHaveBeenCalled();
+    });
+
+    // ORDER-CP-51
+    it('ORDER-CP-51: should throw INTERNAL_SERVER_ERROR on database failure', async () => {
+      const productOfferId = 'prod-1';
+      const dbError = new Error('Database error');
+
+      (service['orderDetails'].findFirst as jest.Mock).mockRejectedValue(
+        dbError,
+      );
+
+      await expect(service.existsProductOffer(productOfferId)).rejects.toThrow(
+        RpcException,
+      );
+
+      try {
+        await service.existsProductOffer(productOfferId);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: 'Error al verificar los detalles de la orden',
+        });
+      }
+    });
+  });
+
+  describe('existsProductOrderClient', () => {
+    // ORDER-CP-52
+    it('ORDER-CP-52: should return true if client bought the product', async () => {
+      const productOfferId = 'prod-1';
+      const clientId = 'client-123';
+      const mockOrderDetail = {
+        id: 'detail-1',
+        orderId: 'order-123',
+        productOfferId: 'prod-1',
+        quantity: 2,
+        price: 10000,
+        subtotal: 20000,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      (service['orderDetails'].findFirst as jest.Mock).mockResolvedValue(
+        mockOrderDetail,
+      );
+
+      const result = await service.existsProductOrderClient(
+        productOfferId,
+        clientId,
+      );
+
+      expect(service['orderDetails'].findFirst).toHaveBeenCalledWith({
+        where: {
+          productOfferId,
+          order: {
+            clientId,
+          },
+        },
+      });
+      expect(result).toBe(true);
+    });
+
+    // ORDER-CP-53
+    it('ORDER-CP-53: should return false if client did not buy the product', async () => {
+      const productOfferId = 'prod-1';
+      const clientId = 'client-123';
+
+      (service['orderDetails'].findFirst as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.existsProductOrderClient(
+        productOfferId,
+        clientId,
+      );
+
+      expect(result).toBe(false);
+    });
+
+    // ORDER-CP-54
+    it('ORDER-CP-54: should throw INTERNAL_SERVER_ERROR on database failure', async () => {
+      const productOfferId = 'prod-1';
+      const clientId = 'client-123';
+      const dbError = new Error('Database error');
+
+      (service['orderDetails'].findFirst as jest.Mock).mockRejectedValue(
+        dbError,
+      );
+
+      await expect(
+        service.existsProductOrderClient(productOfferId, clientId),
+      ).rejects.toThrow(RpcException);
+
+      try {
+        await service.existsProductOrderClient(productOfferId, clientId);
+      } catch (error) {
+        expect(error).toBeInstanceOf(RpcException);
+        expect(error.getError()).toEqual({
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: 'Failed to verify order details',
+        });
+      }
     });
   });
 });
