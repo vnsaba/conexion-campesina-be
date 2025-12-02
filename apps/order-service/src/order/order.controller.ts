@@ -65,9 +65,6 @@ export class OrderController {
 
   @EventPattern('payment.paid')
   async paidOrder(@Payload() paidOrderDto: PaidOrderDto) {
-    console.log(
-      `Received payment.paid event for order: ${paidOrderDto.orderId}`,
-    );
     await this.orderService.paidOrder(paidOrderDto);
   }
 

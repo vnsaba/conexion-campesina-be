@@ -476,7 +476,9 @@ describe('ProductOfferService', () => {
 
       const result = await service.findAllProduct(producerId);
       expect(result).toEqual(mockOffers);
-      expect(service.productOffer.findMany).toHaveBeenCalledWith({
+      expect(
+        service.productOffer.findMany.bind(service.productOffer),
+      ).toHaveBeenCalledWith({
         where: { producerId },
         include: { productBase: true },
         orderBy: { createdAt: 'desc' },

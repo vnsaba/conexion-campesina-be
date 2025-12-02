@@ -96,7 +96,6 @@ export class ReviewController {
   @UseGuards(AuthGuard, UserRoleGuard)
   @Get('summary/:productOfferId')
   summaryReviews(@Param('productOfferId') productOfferId: string) {
-    console.log(productOfferId);
     return this.natsClient
       .send('findAverageRating.Review.ProductOffer', productOfferId)
       .pipe(

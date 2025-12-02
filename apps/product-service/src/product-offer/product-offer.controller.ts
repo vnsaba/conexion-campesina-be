@@ -87,4 +87,17 @@ export class ProductOfferController {
   getProducerId(@Payload() productOfferId: string) {
     return this.productOfferService.getProducerId(productOfferId);
   }
+
+  @MessagePattern('product.offer.findAllWithInventory')
+  async catalogProducts() {
+    return this.productOfferService.catalogProducts();
+  }
+
+  @EventPattern('product.offer.updateActive')
+  handleInventoryUpdated(
+    @Payload() data: { productOfferId: string; isActive: boolean },
+  ) {
+    const { productOfferId, isActive } = data;
+    return this.productOfferService.updateActive(productOfferId, isActive);
+  }
 }

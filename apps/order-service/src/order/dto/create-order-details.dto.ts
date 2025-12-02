@@ -8,8 +8,4 @@ export class CreateOrderDetailsDto {
   @IsNumber()
   @IsPositive()
   quantity: number;
-
-  // @IsNumber()
-  // @IsPositive()
-  // price: number;
 }

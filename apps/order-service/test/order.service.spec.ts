@@ -88,7 +88,7 @@ describe('OrderService', () => {
     it('ORDER-CP-01: should create order with multiple products and calculate totals correctly', async () => {
       const clientId = 'client-456';
       const createOrderDto = {
-        address: 'Carrera 50 #20-30',
+        address: 'Carrera 50 #20-30', // Ensure address is provided
         orderDetails: [
           {
             productOfferId: 'prod-1',
@@ -107,8 +107,12 @@ describe('OrderService', () => {
         ...mockOrder,
         id: 'order-id-456',
         clientId: 'client-456',
+        address: 'Carrera 50 #20-30',
         totalAmount: 35000,
         totalItems: 5,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        orderDate: new Date(),
         orderDetails: [
           {
             id: 'detail-1',
@@ -200,6 +204,8 @@ describe('OrderService', () => {
       const mockOrderCreated = {
         ...mockOrder,
         id: 'order-id-789',
+        clientId: 'client-789',
+        address: 'Avenida 80 #100-50',
         status: OrderStatus.PENDING,
       };
 

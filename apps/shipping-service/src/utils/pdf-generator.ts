@@ -101,7 +101,6 @@ export class PdfGenerator {
     for (const chromePath of chromePaths) {
       if (chromePath && fs.existsSync(chromePath)) {
         try {
-          console.log(`Using Chrome at: ${chromePath}`);
           return await puppeteer.launch({
             executablePath: chromePath,
             headless: true,
@@ -117,7 +116,6 @@ export class PdfGenerator {
     }
 
     // Fallback to bundled Chromium with simplified config (best practices from Medium article)
-    console.log('Using bundled Chromium');
     return await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],

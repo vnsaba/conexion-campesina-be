@@ -55,7 +55,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
     const { orderDetails } = createOrderDto;
 
     try {
-      // 1. Validaciones básicas de entrada
       if (!orderDetails || orderDetails.length === 0) {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
@@ -63,7 +62,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      // 2. Obtener la dirección del usuario desde el servicio de autenticación
       const user = await firstValueFrom(
         this.natsClient.send('auth.get.user', clientId).pipe(
           catchError(() => {
@@ -88,9 +86,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       }
 
       const finalAddress = user.address;
-      this.logger.log(`Usando dirección del perfil del usuario: ${clientId}`);
 
-      // 3. Obtener los IDs de los productos solicitados
       const productOfferIds = orderDetails.map((detail) => {
         if (detail.quantity <= 0) {
           throw new RpcException({
@@ -101,7 +97,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         return detail.productOfferId;
       });
 
-      // 4. Traer la información REAL de los productos desde el Microservicio de Catálogo
       const products: any[] = await Promise.all(
         productOfferIds.map((id) =>
           firstValueFrom(
@@ -115,7 +110,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         ),
       );
 
-      // 5. Verificar si algún producto no existe
       const missingProducts = products
         .map((p, index) => (p ? null : productOfferIds[index]))
         .filter((id) => id !== null);
@@ -127,7 +121,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      // 6. Verificar disponibilidad (flag isAvailable del producto)
       const unavailableProducts = products.filter((p) => !p.isAvailable);
       if (unavailableProducts.length > 0) {
         throw new RpcException({
@@ -136,8 +129,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      // 7. Validación de stock síncrona
-      // Preguntamos al Inventario si tiene suficiente ANTES de crear la orden
       for (const detail of orderDetails) {
         const product = products.find((p) => p.id === detail.productOfferId);
 
@@ -156,8 +147,7 @@ export class OrderService extends PrismaClient implements OnModuleInit {
             });
           }
         } catch (error) {
-          // Si el servicio de inventario falla o devuelve error, asumimos que no se puede vender
-          if (error instanceof RpcException) throw error; // Re-lanzar si es nuestro error de stock
+          if (error instanceof RpcException) throw error;
 
           this.logger.error(
             `Error validando stock para ${product.name}`,
@@ -170,13 +160,12 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         }
       }
 
-      // 8. Calcular totales y preparar detalles
       let totalAmount = 0;
       let totalItems = 0;
 
       const processedOrderDetails = orderDetails.map((detail) => {
         const product = products.find((p) => p.id === detail.productOfferId);
-        const realPrice = product.price; // Precio seguro de la BD
+        const realPrice = product.price;
         const subtotal = detail.quantity * realPrice;
 
         totalAmount += subtotal;
@@ -190,7 +179,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         };
       });
 
-      // 9. Crear la orden en Base de Datos
       const order = await this.order.create({
         data: {
           clientId,
@@ -583,12 +571,19 @@ export class OrderService extends PrismaClient implements OnModuleInit {
 
   async existsProductOffer(productOfferId: string): Promise<boolean> {
     try {
+      if (!productOfferId) {
+        this.logger.warn('Se intentó verificar un productOfferId nulo o vacío');
+        return false;
+      }
       const orderDetail = await this.orderDetails.findFirst({
         where: { productOfferId },
         orderBy: { createdAt: 'asc' },
       });
+      if (!orderDetail) {
+        return false;
+      }
 
-      return !!orderDetail; // true si existe, false si no
+      return true;
     } catch (error) {
       if (error instanceof RpcException) {
         throw error;
@@ -657,7 +652,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      // Validar que el cliente es el propietario de la orden
       if (existingOrder.clientId !== clientId) {
         throw new RpcException({
           status: HttpStatus.FORBIDDEN,
@@ -665,7 +659,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      // Validar que el status es PENDING
       if (existingOrder.status !== 'PENDING') {
         throw new RpcException({
           status: HttpStatus.BAD_REQUEST,
@@ -673,14 +666,12 @@ export class OrderService extends PrismaClient implements OnModuleInit {
         });
       }
 
-      // Actualizar el status a CANCELLED
       const updatedOrder = await this.order.update({
         where: { id: orderId },
         data: { status: 'CANCELLED' },
         include: { orderDetails: true },
       });
 
-      // Emitir evento para que el inventario se actualice
       this.publishOrderStatusEvents(
         'CANCELLED',
         updatedOrder.orderDetails,
@@ -753,8 +744,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   async createPaymentSession(order: OrderWithProducts) {
-    // Usa el tipo correcto OrderWithProducts
-    // 1. Obtenemos los nombres de los productos correctamente usando Promise.all
     const items = await Promise.all(
       order.orderDetails.map(async (item) => {
         const productName = await firstValueFrom(
@@ -768,7 +757,6 @@ export class OrderService extends PrismaClient implements OnModuleInit {
       }),
     );
 
-    // 2. Enviamos a Payment Service
     const paymentSession = await firstValueFrom(
       this.natsClient.send('create.payment.session', {
         orderId: order.id,
@@ -781,50 +769,53 @@ export class OrderService extends PrismaClient implements OnModuleInit {
   }
 
   async paidOrder(paidOrderDto: PaidOrderDto) {
-    this.logger.log(`Procesando pago para orden: ${paidOrderDto.orderId}`);
-
-    const updatedOrder = await this.order.update({
-      where: { id: paidOrderDto.orderId },
-      data: {
-        status: 'PAID',
-        paid: true,
-        paidAt: new Date(),
-        stripeChargeId: paidOrderDto.stripePaymentId,
-        orderReceipt: {
-          create: {
-            receiptUrl: paidOrderDto.receiptUrl,
+    try {
+      const updatedOrder = await this.order.update({
+        where: { id: paidOrderDto.orderId },
+        data: {
+          status: 'PAID',
+          paid: true,
+          paidAt: new Date(),
+          stripeChargeId: paidOrderDto.stripePaymentId,
+          orderReceipt: {
+            create: {
+              receiptUrl: paidOrderDto.receiptUrl,
+            },
           },
         },
-      },
-      include: {
-        orderDetails: true,
-      },
-    });
+        include: {
+          orderDetails: true,
+        },
+      });
 
-    for (const detail of updatedOrder.orderDetails) {
-      const data = {
-        productOfferId: detail.productOfferId,
-        quantity: detail.quantity,
-      };
-      // Emitimos el evento con el detalle de qué descontar
-      this.natsClient.emit('order.confirmed', data);
-    }
+      for (const detail of updatedOrder.orderDetails) {
+        const data = {
+          productOfferId: detail.productOfferId,
+          quantity: detail.quantity,
+        };
+        this.natsClient.emit('order.confirmed', data);
+      }
 
-    // 3. Notificar a productores sobre la orden pagada
-    this.notifyProducers(
-      updatedOrder,
-      updatedOrder.orderDetails,
-      updatedOrder.clientId,
-    ).catch((error) => {
-      this.logger.warn(
-        `Failed to send notifications for order ${updatedOrder.id}`,
+      this.notifyProducers(
+        updatedOrder,
+        updatedOrder.orderDetails,
+        updatedOrder.clientId,
+      ).catch((error) => {
+        this.logger.warn(
+          `Failed to send notifications for order ${updatedOrder.id}`,
+          error,
+        );
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error al procesar el pago para la orden ${paidOrderDto.orderId}`,
         error,
       );
-    });
-
-    this.logger.log(
-      `Orden ${updatedOrder.id} actualizada a PAID y notificada a inventario`,
-    );
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to process paid order',
+      });
+    }
   }
 
   /**

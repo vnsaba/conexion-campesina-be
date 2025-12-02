@@ -96,7 +96,6 @@ export class PaymentServiceService {
           orderId: session.metadata?.orderId,
           receiptUrl: receiptUrl,
         };
-        console.log('receiptUrl:', receiptUrl);
 
         this.natsClient.emit('payment.paid', payload);
 
