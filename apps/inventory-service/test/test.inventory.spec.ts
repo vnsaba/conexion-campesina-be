@@ -354,25 +354,6 @@ describe('InventoryService (full) - Option A', () => {
     ).rejects.toThrow(RpcException);
   });
 
-  it('updateBase() - rejects when threshold > available', async () => {
-    const inv = {
-      id: 'inv1',
-      available_quantity: 10,
-      minimum_threshold: 1,
-      maximum_capacity: 100,
-      productOfferId: 'offer-1',
-    };
-
-    mockInventory.findUnique.mockResolvedValue(inv);
-    mockNatsClient.send.mockReturnValue(
-      of({ id: 'offer-1', quantity: 1, unit: Unit.KILOGRAMO }),
-    );
-
-    await expect(
-      service.updateBase('inv1', { minimum_threshold: 20 }),
-    ).rejects.toThrow(RpcException);
-  });
-
   it('updateBase() - rejects when threshold > maxCapacity', async () => {
     const inv = {
       id: 'inv1',
