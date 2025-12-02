@@ -84,7 +84,6 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         },
       });
 
-      this.logger.log(`ProductOffer created: ${createdProductOffer.id}`);
       return createdProductOffer;
     } catch (error: unknown) {
       if (error instanceof RpcException) throw error;
@@ -257,8 +256,49 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
    */
   async remove(id: string): Promise<{ message: string; id: string }> {
     try {
-      await this.findOne(id);
+      await this.findOne(id); // Verificar que el producto existe localmente
 
+      // 1. Validar Inventario (Con manejo de error 404)
+      const existinInInventory = await firstValueFrom(
+        this.natsClient.send('inventory.findByProductOffer', id).pipe(
+          // Si el MS de Inventario lanza error, lo atrapamos aquí
+          catchError((err) => {
+            // Si el error es "Not Found", significa que NO hay inventario. ¡Es seguro borrar!
+            // Devolvemos 'false' para que la validación de abajo pase.
+            if (err.status === HttpStatus.NOT_FOUND) {
+              return of(false);
+            }
+            // Si es otro error (ej. base de datos caída), que explote.
+            throw err;
+          }),
+        ),
+      );
+
+      if (existinInInventory) {
+        throw new RpcException({
+          status: HttpStatus.CONFLICT,
+          message: `Product offer with id '${id}' cannot be deleted as it exists in an inventory`,
+        });
+      }
+
+      // 2. Validar Órdenes (Con manejo de error 404, por si acaso)
+      const existingInOrder = await firstValueFrom(
+        this.natsClient.send('order.existsProductOffer', id).pipe(
+          catchError((err) => {
+            if (err.status === HttpStatus.NOT_FOUND) return of(false);
+            throw err;
+          }),
+        ),
+      );
+
+      if (existingInOrder) {
+        throw new RpcException({
+          status: HttpStatus.CONFLICT,
+          message: `Product offer with id '${id}' cannot be deleted as it exists in an order`,
+        });
+      }
+
+      // 3. Si no hay dependencias, borrar
       await this.productOffer.delete({ where: { id } });
 
       this.logger.log(`ProductOffer deleted: ${id}`);
@@ -467,6 +507,59 @@ export class ProductOfferService extends PrismaClient implements OnModuleInit {
         (error as Error).stack,
       );
       return null;
+    }
+  }
+
+  /* Buscar los productos que estan disponibles en el catalogo de productos */
+  /* Buscar los productos que estan disponibles en el catalogo de productos */
+  async catalogProducts(): Promise<ProductOfferWithRelations[]> {
+    try {
+      const offers = await this.productOffer.findMany({
+        where: { isActive: true },
+        include: {
+          productBase: true,
+        },
+      });
+
+      return offers;
+    } catch (error) {
+      this.logger.error(
+        'Error retrieving product offers',
+        (error as Error).stack,
+      );
+      throw new RpcException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Failed to retrieve catalog products',
+      });
+    }
+  }
+
+  async updateActive(productId: string, isActive: boolean) {
+    const existingProduct = await this.productOffer.findUnique({
+      where: { id: productId },
+    });
+
+    if (!existingProduct) {
+      throw new RpcException({
+        status: HttpStatus.NOT_FOUND,
+        message: `ProductOffer with id '${productId}' not found`,
+      });
+    }
+    try {
+      await this.productOffer.update({
+        where: { id: productId },
+        data: {
+          isActive: isActive,
+        },
+      });
+    } catch (error) {
+      if (error instanceof RpcException) throw error;
+      RpcError.handle(
+        this.logger,
+        'ProductOfferService',
+        error,
+        'Failed to update product offer to active',
+      );
     }
   }
 }

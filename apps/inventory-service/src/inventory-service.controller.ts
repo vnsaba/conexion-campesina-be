@@ -90,7 +90,7 @@ export class InventoryServiceController {
     );
   }
 
-  @MessagePattern('inventory.validateStock') // Petición síncrona
+  @MessagePattern('inventory.validateStock')
   validateStock(@Payload() data: { productOfferId: string; quantity: number }) {
     return this.inventoryService.validateStock(
       data.productOfferId,

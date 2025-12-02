@@ -22,7 +22,6 @@ import {
 } from 'apps/client-gateway/auth/guards/decorators';
 import { ValidRoles } from '../../auth/enum/valid-roles.enum';
 import { ApiBearerAuth } from '@nestjs/swagger';
-import { firstValueFrom } from 'rxjs';
 import { CurrentUser } from 'apps/client-gateway/auth/guards/interface/current-user.interface';
 
 const NATS_SERVICE_KEY = process.env.NATS_SERVICE_KEY;
@@ -78,6 +77,16 @@ export class ProductOfferController {
     );
   }
 
+  @RoleProtected(ValidRoles.PRODUCER, ValidRoles.CLIENT, ValidRoles.ADMIN)
+  @UseGuards(AuthGuard, UserRoleGuard)
+  @Get('catalog')
+  catalogProducts() {
+    return this.natsClient.send('product.offer.findAllWithInventory', {}).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
+  }
   /**
    * Retrieves product offers by name.
    * Sends request to the NATS product service and returns the filtered product offers.
@@ -155,37 +164,12 @@ export class ProductOfferController {
   @RoleProtected(ValidRoles.PRODUCER, ValidRoles.ADMIN)
   @UseGuards(AuthGuard, UserRoleGuard)
   @Delete(':id')
-  async removeProductOffer(@Param('id') id: string) {
-    const existOrderProducts = await this.existOrderProducts(id);
-
-    if (existOrderProducts) {
-      throw new RpcException(
-        'Cannot delete product offer associated with existing orders.',
-      );
-    }
-    try {
-      return await firstValueFrom(
-        this.natsClient.send('product.offer.remove', id),
-      );
-    } catch (error) {
-      throw new RpcException(error);
-    }
-  }
-
-  /**
-   * Checks if a product offer is associated with any order.
-   * Sends a message to the order service to verify its existence in orders.
-   */
-  async existOrderProducts(id: string): Promise<boolean> {
-    try {
-      const existOrderObservable = this.natsClient.send(
-        'order.existsProductOffer',
-        id,
-      );
-      return await firstValueFrom(existOrderObservable);
-    } catch (error) {
-      throw new RpcException(error);
-    }
+  removeProductOffer(@Param('id') id: string) {
+    return this.natsClient.send('product.offer.remove', id).pipe(
+      catchError((error) => {
+        throw new RpcException(error);
+      }),
+    );
   }
 
   /**

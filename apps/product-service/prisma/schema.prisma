@@ -17,6 +17,7 @@ model ProductBase {
   @@map("product_bases")
 }
 
+
 model ProductOffer {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
   productBaseId String      @db.ObjectId
@@ -25,13 +26,18 @@ model ProductOffer {
   name          String
   description   String
   price         Float
-  isAvailable   Boolean     @default(true) 
-  imageUrl      String
-  unit          Unit
-  quantity      Float 
-  stockLimit    Float       @default(0) 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  isAvailable Boolean @default(true)
+  isActive    Boolean  @default(false) // o status: 'PENDING'
+  imageUrl    String
+  unit        Unit // Unidad en la que SE VENDE (ej: bulto, kilo, gramo, caja)
+
+  // Cantidad equivalente de esa unidad en UNIDAD BASE (ej: gramos)
+  // Si unidad="KG" → quantityPerUnit = 1000 (gramos)
+  // Si unidad="BULTO" → quantityPerUnit = 25000 (gramos)
+  // Si unidad="GRAMO" → quantityPerUnit = 1
+  quantity  Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([productBaseId])
   @@index([producerId])

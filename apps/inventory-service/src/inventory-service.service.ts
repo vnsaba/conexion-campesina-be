@@ -18,6 +18,81 @@ export class InventoryService {
     private readonly unitConverter: UnitConverterService,
   ) {}
 
+  private async validateProducer(producerId: string) {
+    const producer = await firstValueFrom(
+      this.natsClient.send('auth.get.user', producerId),
+    );
+    if (!producer) {
+      throw RpcError.notFound(`Producer with id '${producerId}' not found`);
+    }
+    return producer;
+  }
+
+  private async validateProductOffer(productOfferId: string) {
+    const productOffer = await firstValueFrom(
+      this.natsClient.send('product.offer.findOne', productOfferId),
+    );
+    if (!productOffer) {
+      throw RpcError.notFound(
+        `Product Offer with id '${productOfferId}' not found`,
+      );
+    }
+    return productOffer;
+  }
+
+  private validateInventoryInput(createInventory: CreateInventoryDto) {
+    const { available_quantity, maximum_capacity, minimum_threshold } =
+      createInventory;
+    if (available_quantity < 0) {
+      throw RpcError.badRequest('avaliable_quantity must be >= 0');
+    }
+    if (maximum_capacity < 1) {
+      throw RpcError.badRequest('maximum_capacity must be >= 1');
+    }
+    if (maximum_capacity < available_quantity) {
+      throw RpcError.badRequest(
+        'maximum_capacity must be >= available_quantity',
+      );
+    }
+    if (minimum_threshold > available_quantity) {
+      throw RpcError.badRequest(
+        'minimum_threshold must be < available_quantity',
+      );
+    }
+    if (minimum_threshold > maximum_capacity) {
+      throw RpcError.badRequest(
+        'minimum_threshold must be <= maximum_capacity',
+      );
+    }
+  }
+
+  private async checkInventoryDuplicate(productOfferId: string) {
+    const existingInventory = await this.prisma.inventory.findFirst({
+      where: { productOfferId },
+    });
+    if (existingInventory) {
+      throw RpcError.badRequest(
+        `Inventory for product offer '${productOfferId}' already exists`,
+      );
+    }
+  }
+
+  private calculateUnitEquivalent(
+    quantity: number,
+    productOffer: any,
+    inventory: Inventory,
+  ) {
+    const totalQuantity = quantity * productOffer.quantity;
+    if (productOffer.unit === inventory.unit) {
+      return totalQuantity;
+    }
+    return this.unitConverter.convert(
+      totalQuantity,
+      productOffer.unit,
+      inventory.unit,
+    );
+  }
+
   /**
    * Crea un nuevo registro de inventario asociado a una oferta de producto y un productor.
    * - Valida que el productor exista (vía NATS al MS de Auth)
@@ -30,60 +105,29 @@ export class InventoryService {
    */
   async create(producerId: string, createInventory: CreateInventoryDto) {
     try {
-      const {
-        productOfferId,
-        available_quantity,
-        unit,
-        minimum_threshold,
-        maximum_capacity,
-      } = createInventory;
-      if (available_quantity < 0 || maximum_capacity < 1) {
-        throw RpcError.badRequest('avaliable_quantity must be >= 0');
-      }
-
-      if (maximum_capacity < 1) {
-        throw RpcError.badRequest('maximum_capacity must be >= 1');
-      }
-
-      if (maximum_capacity < available_quantity) {
-        throw RpcError.badRequest(
-          'maximum_capacity must be >= available_quantity',
-        );
-      }
-
-      this.logger.log('producerId: ' + producerId);
-      const producer = this.natsClient.send('auth.get.user', producerId);
-
-      if (!producer) {
-        throw RpcError.notFound(`Producer with id '${producerId}' not found`);
-      }
-
-      const productOffer = await firstValueFrom(
-        this.natsClient.send('product.offer.findOne', productOfferId),
+      this.validateInventoryInput(createInventory);
+      await this.checkInventoryDuplicate(createInventory.productOfferId);
+      await this.validateProducer(producerId);
+      const productOffer = await this.validateProductOffer(
+        createInventory.productOfferId,
       );
 
-      if (!productOffer)
-        throw RpcError.notFound(
-          `Product Offer with id '${productOfferId}' not found`,
+      if (createInventory.available_quantity < productOffer.quantity) {
+        throw RpcError.badRequest(
+          'available_quantity must be >= product offer quantity',
         );
+      }
 
-      const existingInventory = await this.prisma.inventory.findFirst({
-        where: { productOfferId, producerId },
-      });
-
-      if (existingInventory)
-        throw RpcError.internal(
-          'Inventory for this Product Offer and Producer already exists',
-        );
       const inventory = await this.prisma.inventory.create({
         data: {
           producerId,
-          productOfferId,
-          available_quantity,
-          unit,
-          minimum_threshold,
-          maximum_capacity,
+          ...createInventory,
         },
+      });
+
+      this.natsClient.emit('product.offer.updateActive', {
+        productOfferId: createInventory.productOfferId,
+        isActive: createInventory.available_quantity > productOffer.quantity,
       });
 
       return inventory;
@@ -129,19 +173,28 @@ export class InventoryService {
    */
   async findByProducer(producerId: string) {
     try {
-      const existingProducer = await firstValueFrom(
-        this.natsClient.send('auth.get.user', producerId),
-      );
-
-      if (!existingProducer) {
-        throw RpcError.notFound(`Producer with id '${producerId}' not found`);
-      }
+      await this.validateProducer(producerId);
 
       const inventories = await this.prisma.inventory.findMany({
         where: { producerId },
       });
 
-      return inventories;
+      if (!inventories.length) return [];
+
+      const productNames = await Promise.all(
+        inventories.map((inv) =>
+          firstValueFrom(
+            this.natsClient.send('product.offer.getName', inv.productOfferId),
+          ),
+        ),
+      );
+
+      const inventoriesWithNames = inventories.map((inv, index) => ({
+        ...inv,
+        product_name: productNames[index],
+      }));
+
+      return inventoriesWithNames;
     } catch (error) {
       RpcError.handle(
         this.logger,
@@ -219,17 +272,41 @@ export class InventoryService {
    */
   async updateBase(id: string, updateInventory: UpdateInventoryDto) {
     try {
-      const { available_quantity, minimum_threshold } = updateInventory;
-
       const inventory = await this.findOne(id);
+      const productOffer = await this.validateProductOffer(
+        inventory!.productOfferId,
+      );
 
-      return await this.prisma.inventory.update({
+      const finalValues = this.getFinalInventoryValues(
+        inventory,
+        updateInventory,
+      );
+
+      this.validateInventoryUpdate(finalValues);
+
+      const updatedInventory = await this.prisma.inventory.update({
         where: { id: inventory!.id },
         data: {
-          ...(available_quantity !== undefined && { available_quantity }),
-          ...(minimum_threshold !== undefined && { minimum_threshold }),
+          ...(updateInventory.available_quantity !== undefined && {
+            available_quantity: updateInventory.available_quantity,
+          }),
+          ...(updateInventory.minimum_threshold !== undefined && {
+            minimum_threshold: updateInventory.minimum_threshold,
+          }),
+          ...(updateInventory.maximum_capacity !== undefined && {
+            maximum_capacity: updateInventory.maximum_capacity,
+          }),
         },
       });
+
+      if (updateInventory.available_quantity !== undefined) {
+        this.handleProductOfferActiveStatus(
+          updatedInventory,
+          productOffer.quantity,
+        );
+      }
+
+      return updatedInventory;
     } catch (error) {
       RpcError.handle(
         this.logger,
@@ -238,6 +315,63 @@ export class InventoryService {
         'Failed to update inventory',
       );
     }
+  }
+
+  private getFinalInventoryValues(
+    inventory: any,
+    updateDto: UpdateInventoryDto,
+  ) {
+    return {
+      available: updateDto.available_quantity ?? inventory.available_quantity,
+      threshold: updateDto.minimum_threshold ?? inventory.minimum_threshold,
+      maxCapacity: updateDto.maximum_capacity ?? inventory.maximum_capacity,
+    };
+  }
+
+  private validateInventoryUpdate(values: {
+    available: number;
+    threshold: number;
+    maxCapacity: number;
+  }) {
+    const { available, threshold, maxCapacity } = values;
+
+    if (available < 0) {
+      throw RpcError.badRequest('available_quantity must be >= 0');
+    }
+
+    if (maxCapacity < 1) {
+      throw RpcError.badRequest('maximum_capacity must be >= 1');
+    }
+
+    if (available > maxCapacity) {
+      throw RpcError.badRequest(
+        'available_quantity cannot exceed maximum_capacity',
+      );
+    }
+
+    if (threshold > maxCapacity) {
+      throw RpcError.badRequest(
+        'minimum_threshold cannot exceed maximum_capacity',
+      );
+    }
+
+    if (threshold > available) {
+      throw RpcError.badRequest(
+        'minimum_threshold cannot exceed available_quantity',
+      );
+    }
+  }
+
+  private handleProductOfferActiveStatus(
+    inventory: any,
+    offerQuantity: number,
+  ) {
+    const isActive = inventory.available_quantity >= offerQuantity;
+
+    this.natsClient.emit('product.offer.updateActive', {
+      productOfferId: inventory.productOfferId,
+      isActive,
+    });
   }
 
   /**
@@ -325,21 +459,16 @@ export class InventoryService {
    * @param productOfferId - ID del producto en la orden
    * @param quantity - Cantidad comprada
    * @returns void
-   * @note Atrapa errores internamente (log) y NO relanza la excepción para evitar "Mensajes Envenenados" en NATS.
    */
-  async handleOrderConfirmed(productOfferId: string, quantity: number) {
+  async handleOrderConfirmed(productOfferId: string, quantity_order: number) {
     try {
       const inventory = await this.findByProductOffer(productOfferId);
-      const productOffer = await firstValueFrom(
-        this.natsClient.send('product.offer.findOne', productOfferId),
-      );
+      const productOffer = await this.validateProductOffer(productOfferId);
 
-      const totalQuantity = quantity * productOffer.quantity;
-
-      const unitEquivalent = this.unitConverter.convert(
-        totalQuantity,
-        productOffer.unit,
-        inventory!.unit,
+      const unitEquivalent = this.calculateUnitEquivalent(
+        quantity_order,
+        productOffer,
+        inventory!,
       );
 
       if (inventory!.available_quantity < unitEquivalent) {
@@ -384,7 +513,6 @@ export class InventoryService {
     quantity: number,
   ) {
     try {
-      // 1) Obtener la orden real desde el MS de Orders
       const order = await firstValueFrom(
         this.natsClient.send('order.findOne', orderId),
       );
@@ -394,7 +522,6 @@ export class InventoryService {
         return;
       }
 
-      // 2) Validar que SOLO se pueda cancelar cuando está en pending
       if (order.status !== 'pending') {
         this.logger.warn(
           `Order '${orderId}' cannot be cancelled because status is '${order.status}'`,
@@ -402,31 +529,22 @@ export class InventoryService {
         return;
       }
 
-      // 3) Cargar inventario y producto
       const inventory = await this.findByProductOffer(productOfferId);
-      const productOffer = await firstValueFrom(
-        this.natsClient.send('product.offer.findOne', productOfferId),
+      const productOffer = await this.validateProductOffer(productOfferId);
+
+      const unitEquivalent = this.calculateUnitEquivalent(
+        quantity,
+        productOffer,
+        inventory!,
       );
 
-      if (!inventory || !productOffer) return;
-
-      const totalQuantity = quantity * productOffer.quantity;
-
-      const unitEquivalent = this.unitConverter.convert(
-        totalQuantity,
-        productOffer.unit,
-        inventory.unit,
-      );
-
-      // 5) Devolver stock (increment)
       const updatedInventory = await this.prisma.inventory.update({
-        where: { id: inventory.id },
+        where: { id: inventory!.id },
         data: {
           available_quantity: { increment: unitEquivalent },
         },
       });
 
-      // 6) Actualizar disponibilidad del producto si aplica
       this.productAvailability(updatedInventory);
 
       this.logger.log(
@@ -479,21 +597,22 @@ export class InventoryService {
   }
 
   async validateStock(productOfferId: string, quantity: number) {
-    const inventory = await this.findByProductOffer(productOfferId);
+    try {
+      const inventory = await this.findByProductOffer(productOfferId);
+      const productOffer = await this.validateProductOffer(productOfferId);
 
-    const productOffer = await firstValueFrom(
-      this.natsClient.send('product.offer.findOne', productOfferId),
-    );
+      const requiredAmount = this.calculateUnitEquivalent(
+        quantity,
+        productOffer,
+        inventory!,
+      );
 
-    if (!inventory || !productOffer) return false;
-
-    const totalQuantity = quantity * productOffer.quantity;
-    const requiredAmount = this.unitConverter.convert(
-      totalQuantity,
-      productOffer.unit,
-      inventory.unit,
-    );
-
-    return inventory.available_quantity >= requiredAmount;
+      return inventory!.available_quantity >= requiredAmount;
+    } catch (error) {
+      this.logger.error(
+        `Error validating stock for productOfferId '${productOfferId}': ${(error as Error).message}`,
+      );
+      return false;
+    }
   }
 }
